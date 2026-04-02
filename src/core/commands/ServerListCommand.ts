@@ -28,21 +28,52 @@ export class ServerListCommand implements SymfonyCommandInterface<SymfonyServer[
     }
 
     async execute(args: string[] = []): Promise<SymfonyServer[]> {
-        const commandArgs = ['server:list', '--format=json', ...args];
+        const commandArgs = ['server:list', '--no-ansi', ...args];
         const output = await this.processRunner.run(commandArgs);
 
-        try {
-            const parsed = JSON.parse(output) as SymfonyCliServer[];
-            return parsed.map((server) => ({
-                directory: server.dir,
-                port: server.port,
-                url: `${server.scheme}://${server.host}:${server.port}`,
-                isRunning: server.isRunning,
-                pid: server.pid,
-                phpVersion: server.php,
-            }));
-        } catch (e) {
-            return [];
+        const servers: SymfonyServer[] = [];
+        const lines = output.split('\n');
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('+') || trimmed.startsWith('-') ||
+                trimmed.includes('Directory') || !trimmed.includes('|')) {
+                continue;
+            }
+
+            const columns = trimmed.split('|')
+                .map(c => c.trim())
+                .filter(c => c !== '');
+
+            if (columns.length < 2) continue;
+
+            const directory = columns[0];
+            const portStr = columns[1];
+
+            let port = 8000;
+            let isRunning = false;
+
+            if (portStr.toLowerCase() === 'not running') {
+                isRunning = false;
+            } else {
+                const p = parseInt(portStr, 10);
+                if (!isNaN(p)) {
+                    port = p;
+                    isRunning = true;
+                }
+            }
+
+            // URL
+            const url = isRunning ? `https://127.0.0.1:${port}` : '';
+
+            servers.push({
+                directory,
+                port,
+                url,
+                isRunning
+            });
         }
+
+        return servers;
     }
 }

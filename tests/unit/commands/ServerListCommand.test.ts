@@ -16,54 +16,40 @@ describe('ServerListCommand', () => {
         expect(command.getName()).toBe('server:list');
     });
 
-    it('should parse JSON output from symfony server:list', async () => {
-        const mockJsonOutput = JSON.stringify([
-            {
-                "dir": "/home/user/project1",
-                "port": 8000,
-                "scheme": "http",
-                "host": "127.0.0.1",
-                "isRunning": true,
-                "pid": 1234,
-                "php": "8.2.0"
-            },
-            {
-                "dir": "/home/user/project2",
-                "port": 8001,
-                "scheme": "https",
-                "host": "localhost",
-                "isRunning": false
-            }
-        ]);
+    it('should parse text output from symfony server:list', async () => {
+        const mockOutput = `
++----------------------------+-------------+---------+
+| Directory                  | Port        | Domains |
++----------------------------+-------------+---------+
+| /home/user/project1        | 8000        |         |
+| /home/user/project2        | Not running |         |
++----------------------------+-------------+---------+
+`;
 
-        mockProcessRunner.run.mockResolvedValue(mockJsonOutput);
+        mockProcessRunner.run.mockResolvedValue(mockOutput);
 
         const result = await command.execute();
 
-        expect(mockProcessRunner.run).toHaveBeenCalledWith(['server:list', '--format=json']);
+        expect(mockProcessRunner.run).toHaveBeenCalledWith(['server:list', '--no-ansi']);
         expect(result).toHaveLength(2);
         
         expect(result[0]).toEqual({
             directory: "/home/user/project1",
             port: 8000,
-            url: "http://127.0.0.1:8000",
-            isRunning: true,
-            pid: 1234,
-            phpVersion: "8.2.0"
+            url: "https://127.0.0.1:8000",
+            isRunning: true
         });
 
         expect(result[1]).toEqual({
             directory: "/home/user/project2",
-            port: 8001,
-            url: "https://localhost:8001",
-            isRunning: false,
-            pid: undefined,
-            phpVersion: undefined
+            port: 8000,
+            url: "",
+            isRunning: false
         });
     });
 
-    it('should return empty array on invalid JSON', async () => {
-        mockProcessRunner.run.mockResolvedValue('invalid json');
+    it('should return empty array on empty output', async () => {
+        mockProcessRunner.run.mockResolvedValue('');
         const result = await command.execute();
         expect(result).toEqual([]);
     });
