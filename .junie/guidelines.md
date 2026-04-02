@@ -34,3 +34,8 @@
 - `tests/`: Súbory s testami (Jest).
 - `dist/`: Výstup z buildu.
 - `assets/`: Statické súbory (ikony).
+- 
+## 7. Stratégia Testovania (Unit vs Integration)
+- **Unit Testy (`tests/unit/`):** Musia byť 100% mockované. Žiadne volania reálneho systému alebo shellu. Tieto testy musia byť rýchle a nezávislé od prostredia (vhodné pre CI/CD).
+- **Integračné Testy (`tests/integration/`):** Tieto testy volajú reálnu binárku `symfony` CLI. Spúšťajú sa len vtedy, ak je nastavená premenná prostredia `RUN_INTEGRATION=1`.
+- **RealProcessRunner (pre testy):** Pre integračné testy v prostredí Jest vytvor implementáciu `ProcessRunnerInterface`, ktorá využíva Node.js modul `child_process` (keďže Jest beží v Node, nie v GJS).
