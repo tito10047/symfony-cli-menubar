@@ -16,13 +16,18 @@ export class OpenLogCommand implements SymfonyCommandInterface<string> {
     }
 
     async execute(args: string[] = []): Promise<string> {
-        if (!args || args.length === 0) {
-            throw new Error('Project directory is required');
+        try {
+            if (!args || args.length === 0) {
+                throw new Error('Project directory is required');
+            }
+
+            const projectPath = args[0];
+            this.logger?.info(`Preparing log command for project: ${projectPath}`);
+
+            return `symfony server:log --dir=${projectPath}`;
+        } catch (error) {
+            this.logger?.error(`Command ${this.getName()} failed: ${error}`);
+            throw error;
         }
-
-        const projectPath = args[0];
-        this.logger?.info(`Preparing log command for project: ${projectPath}`);
-
-        return `symfony server:log --dir=${projectPath}`;
     }
 }

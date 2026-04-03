@@ -1,12 +1,8 @@
 {
+  "uuid": "symfony-cli-menubar@jozefm.github.com",
   "name": "Symfony CLI Menubar",
-  "description": "Control and monitor your Symfony projects from the GNOME top bar.",
-  "uuid": "symfony-menubar@jozefm.github.com",
-  "shell-version": [
-    "45",
-    "46",
-    "47"
-  ],
-  "url": "https://github.com/jozefm/symfony-cli-menubar",
-  "version": 1
+  "description": "Manage your Symfony local servers from the top bar",
+  "shell-version": [ "45", "46", "47", "48", "49", "50" ],
+  "version": 1,
+  "type": "extension"
 }

@@ -48,12 +48,17 @@ export class SymfonyCliManager {
     }
 
     async runCommand<T>(commandName: string, args?: string[]): Promise<T> {
-        const command = this.commands.get(commandName);
-        if (!command) {
-            this.logger?.error(`Command ${commandName} not found`);
-            throw new Error(`Command ${commandName} not found`);
-        }
+        try {
+            const command = this.commands.get(commandName);
+            if (!command) {
+                this.logger?.error(`Command ${commandName} not found`);
+                throw new Error(`Command ${commandName} not found`);
+            }
 
-        return await command.execute(args);
+            return await command.execute(args);
+        } catch (error) {
+            this.logger?.error(`Error running command ${commandName}: ${error}`);
+            throw error;
+        }
     }
 }

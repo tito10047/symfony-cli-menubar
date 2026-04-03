@@ -1,5 +1,5 @@
 // src/extension.ts
-import { Extension } from "gi://gnome-shell/extensions/extension";
+import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 
 // src/core/logging/ConsoleLogger.ts
@@ -546,12 +546,17 @@ var OpenLogCommand = class {
     this.logger = logger;
   }
   async execute(args = []) {
-    if (!args || args.length === 0) {
-      throw new Error("Project directory is required");
+    try {
+      if (!args || args.length === 0) {
+        throw new Error("Project directory is required");
+      }
+      const projectPath = args[0];
+      this.logger?.info(`Preparing log command for project: ${projectPath}`);
+      return `symfony server:log --dir=${projectPath}`;
+    } catch (error) {
+      this.logger?.error(`Command ${this.getName()} failed: ${error}`);
+      throw error;
     }
-    const projectPath = args[0];
-    this.logger?.info(`Preparing log command for project: ${projectPath}`);
-    return `symfony server:log --dir=${projectPath}`;
   }
 };
 
@@ -586,12 +591,17 @@ var SymfonyCliManager = class {
     this.commands.set(command.getName(), command);
   }
   async runCommand(commandName, args) {
-    const command = this.commands.get(commandName);
-    if (!command) {
-      this.logger?.error(`Command ${commandName} not found`);
-      throw new Error(`Command ${commandName} not found`);
+    try {
+      const command = this.commands.get(commandName);
+      if (!command) {
+        this.logger?.error(`Command ${commandName} not found`);
+        throw new Error(`Command ${commandName} not found`);
+      }
+      return await command.execute(args);
+    } catch (error) {
+      this.logger?.error(`Error running command ${commandName}: ${error}`);
+      throw error;
     }
-    return await command.execute(args);
   }
 };
 
@@ -607,7 +617,7 @@ import St from "gi://St";
 import Gio2 from "gi://Gio";
 import GLib from "gi://GLib";
 import Clutter from "gi://Clutter";
-import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
+import * as PopupMenu2 from "resource:///org/gnome/shell/ui/popupMenu.js";
 var SYMFONY_DOCS_URL = "https://symfony.com/download";
 var MenuBuilder = class {
   _logger;
@@ -615,21 +625,25 @@ var MenuBuilder = class {
     this._logger = logger;
   }
   buildMenu(menu, data, cliManager, extension) {
+    console.log("[SymfonyMenubar] buildMenu zavolan\xE9!");
     menu.removeAll();
+    const testItem = new PopupMenu2.PopupMenuItem("Test - Menu funguje!");
+    menu.addMenuItem(testItem);
+    console.log("[SymfonyMenubar] Testovacia polo\u017Eka pridan\xE1.");
     this._buildHeader(menu);
-    menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    menu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
     if (!data.cliAvailable) {
       this._buildCliErrorState(menu);
     } else {
       this._buildPhpSection(menu, data.phpVersions, data.phpInfoMap);
-      menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+      menu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
       this._buildServersSection(menu, data.servers, data.proxyStatus.proxies, cliManager);
     }
-    menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    menu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
     this._buildFooter(menu, extension);
   }
   _buildHeader(menu) {
-    const item = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    const item = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const box = new St.BoxLayout({
       style_class: "symfony-header-box",
       x_expand: true
@@ -656,12 +670,12 @@ var MenuBuilder = class {
     menu.addMenuItem(item);
   }
   _buildCliErrorState(menu) {
-    const errorItem = new PopupMenu.PopupMenuItem("\u26A0  Symfony CLI nebolo n\xE1jden\xE9", {
+    const errorItem = new PopupMenu2.PopupMenuItem("\u26A0  Symfony CLI nebolo n\xE1jden\xE9", {
       reactive: false
     });
     errorItem.label.add_style_class("cli-error-item");
     menu.addMenuItem(errorItem);
-    const installItem = new PopupMenu.PopupMenuItem("Kliknite pre n\xE1vod na in\u0161tal\xE1ciu");
+    const installItem = new PopupMenu2.PopupMenuItem("Kliknite pre n\xE1vod na in\u0161tal\xE1ciu");
     installItem.connect("activate", () => {
       try {
         Gio2.AppInfo.launch_default_for_uri(SYMFONY_DOCS_URL, null);
@@ -674,16 +688,16 @@ var MenuBuilder = class {
   _buildPhpSection(menu, versions, phpInfoMap) {
     for (const phpVersion of versions) {
       const label = phpVersion.isDefault ? `php ${phpVersion.version} (default)` : `php ${phpVersion.version}`;
-      const item = new PopupMenu.PopupSubMenuMenuItem(label);
+      const item = new PopupMenu2.PopupSubMenuMenuItem(label);
       const info = phpInfoMap.get(phpVersion.version);
       if (info) {
         const iniText = info.phpIniPath ? `php.ini: ${info.phpIniPath}` : "php.ini: (nen\xE1jden\xE9)";
-        const iniItem = new PopupMenu.PopupMenuItem(iniText, { reactive: false });
+        const iniItem = new PopupMenu2.PopupMenuItem(iniText, { reactive: false });
         iniItem.label.add_style_class("small-gray-text");
         item.menu.addMenuItem(iniItem);
         const modulesText = this._buildModulesString(info);
         item.menu.addMenuItem(
-          new PopupMenu.PopupMenuItem(modulesText, { reactive: false })
+          new PopupMenu2.PopupMenuItem(modulesText, { reactive: false })
         );
       }
       menu.addMenuItem(item);
@@ -703,7 +717,7 @@ var MenuBuilder = class {
     const otherServers = servers.filter(
       (s) => !proxies.some((p) => p.directory === s.directory)
     );
-    const favTitleItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    const favTitleItem = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const favTitle = new St.Label({
       text: "OB\u013D\xDABEN\xC9 SERVERY",
       style_class: "section-title"
@@ -711,7 +725,7 @@ var MenuBuilder = class {
     favTitleItem.add_child(favTitle);
     menu.addMenuItem(favTitleItem);
     if (favoriteServers.length === 0) {
-      const emptyItem = new PopupMenu.PopupMenuItem("(\u017Eiadne)", { reactive: false });
+      const emptyItem = new PopupMenu2.PopupMenuItem("(\u017Eiadne)", { reactive: false });
       emptyItem.label.add_style_class("small-gray-text");
       menu.addMenuItem(emptyItem);
     } else {
@@ -721,9 +735,9 @@ var MenuBuilder = class {
         menu.addMenuItem(this._buildServerItem(server, domainName, cliManager));
       }
     }
-    const othersItem = new PopupMenu.PopupSubMenuMenuItem("OSTATN\xC9 SERVERY");
+    const othersItem = new PopupMenu2.PopupSubMenuMenuItem("OSTATN\xC9 SERVERY");
     if (otherServers.length === 0) {
-      const emptyItem = new PopupMenu.PopupMenuItem("(\u017Eiadne)", { reactive: false });
+      const emptyItem = new PopupMenu2.PopupMenuItem("(\u017Eiadne)", { reactive: false });
       emptyItem.label.add_style_class("small-gray-text");
       othersItem.menu.addMenuItem(emptyItem);
     } else {
@@ -736,7 +750,7 @@ var MenuBuilder = class {
   }
   _buildServerItem(server, domainName, cliManager) {
     const statusDot = server.isRunning ? "\u25CF " : "\u25CB ";
-    const item = new PopupMenu.PopupSubMenuMenuItem(`${statusDot}${domainName}`);
+    const item = new PopupMenu2.PopupSubMenuMenuItem(`${statusDot}${domainName}`);
     const portLabel = new St.Label({
       text: `:${server.port}`,
       style_class: "small-gray-text",
@@ -748,14 +762,14 @@ var MenuBuilder = class {
     return item;
   }
   _buildServerDetail(subMenu, server, domainName, cliManager) {
-    const titleItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    const titleItem = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const titleLabel = new St.Label({
       text: domainName,
       style: "font-weight: bold;"
     });
     titleItem.add_child(titleLabel);
     subMenu.addMenuItem(titleItem);
-    const statusItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    const statusItem = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const statusText = server.isRunning ? `Be\u017E\xED na porte ${server.port}` : "Zastaven\xFD";
     const statusLabel = new St.Label({
       text: statusText,
@@ -763,8 +777,8 @@ var MenuBuilder = class {
     });
     statusItem.add_child(statusLabel);
     subMenu.addMenuItem(statusItem);
-    subMenu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-    const toggleItem = new PopupMenu.PopupMenuItem(
+    subMenu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
+    const toggleItem = new PopupMenu2.PopupMenuItem(
       server.isRunning ? "Zastavi\u0165 server" : "Spusti\u0165 server"
     );
     toggleItem.connect("activate", () => {
@@ -774,9 +788,9 @@ var MenuBuilder = class {
       });
     });
     subMenu.addMenuItem(toggleItem);
-    subMenu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    subMenu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
     if (server.isRunning && server.url) {
-      const openItem = new PopupMenu.PopupMenuItem("Otvori\u0165 v prehliada\u010Di");
+      const openItem = new PopupMenu2.PopupMenuItem("Otvori\u0165 v prehliada\u010Di");
       openItem.connect("activate", () => {
         try {
           Gio2.AppInfo.launch_default_for_uri(server.url, null);
@@ -787,15 +801,15 @@ var MenuBuilder = class {
       subMenu.addMenuItem(openItem);
     }
     if (server.url) {
-      const copyUrlItem = new PopupMenu.PopupMenuItem("Kop\xEDrova\u0165 URL");
+      const copyUrlItem = new PopupMenu2.PopupMenuItem("Kop\xEDrova\u0165 URL");
       copyUrlItem.connect("activate", () => {
         St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, server.url);
         this._logger.info(`Copied URL: ${server.url}`);
       });
       subMenu.addMenuItem(copyUrlItem);
     }
-    subMenu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-    const logsItem = new PopupMenu.PopupMenuItem("Zobrazi\u0165 logy");
+    subMenu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
+    const logsItem = new PopupMenu2.PopupMenuItem("Zobrazi\u0165 logy");
     logsItem.connect("activate", () => {
       cliManager.runCommand("open:log", [server.directory]).then((cmd) => {
         try {
@@ -806,15 +820,15 @@ var MenuBuilder = class {
       }).catch((e) => this._logger.error(`open:log failed: ${e}`));
     });
     subMenu.addMenuItem(logsItem);
-    subMenu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-    const pathItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    subMenu.addMenuItem(new PopupMenu2.PopupSeparatorMenuItem());
+    const pathItem = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const pathLabel = new St.Label({
       text: server.directory,
       style_class: "small-gray-text"
     });
     pathItem.add_child(pathLabel);
     subMenu.addMenuItem(pathItem);
-    const actionsItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+    const actionsItem = new PopupMenu2.PopupBaseMenuItem({ reactive: false, can_focus: false });
     const actionsBox = new St.BoxLayout({ spacing: 8 });
     const copyPathBtn = this._makeTextButton("Kop\xEDrova\u0165 cestu", () => {
       St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, server.directory);
@@ -850,7 +864,7 @@ var MenuBuilder = class {
     return btn;
   }
   _buildFooter(menu, extension) {
-    const settingsItem = new PopupMenu.PopupMenuItem("Nastavenia");
+    const settingsItem = new PopupMenu2.PopupMenuItem("Nastavenia");
     settingsItem.connect("activate", () => {
       try {
         extension.openPreferences();
@@ -859,12 +873,12 @@ var MenuBuilder = class {
       }
     });
     menu.addMenuItem(settingsItem);
-    const aboutItem = new PopupMenu.PopupMenuItem("O aplik\xE1cii");
+    const aboutItem = new PopupMenu2.PopupMenuItem("O aplik\xE1cii");
     aboutItem.connect("activate", () => {
       this._logger.info("About: Symfony CLI Menubar - GNOME Shell Extension");
     });
     menu.addMenuItem(aboutItem);
-    const quitItem = new PopupMenu.PopupMenuItem("Ukon\u010Di\u0165");
+    const quitItem = new PopupMenu2.PopupMenuItem("Ukon\u010Di\u0165");
     quitItem.connect("activate", () => {
       this._logger.info("Quit requested by user");
     });
@@ -883,6 +897,7 @@ var Indicator = GObject.registerClass(
     _pendingRefresh = false;
     _init(cliManager, logger, extension) {
       super._init(0, "Symfony CLI Menubar", false);
+      console.log("[SymfonyMenubar] Indicator inicializovan\xFD");
       this._cliManager = cliManager;
       this._logger = logger;
       this._extension = extension;
@@ -893,8 +908,12 @@ var Indicator = GObject.registerClass(
       });
       this.add_child(label);
       this.menu.connect("open-state-changed", (_menu, isOpen) => {
-        if (!isOpen && this._pendingRefresh) {
-          this._doRefresh();
+        try {
+          if (!isOpen && this._pendingRefresh) {
+            this._doRefresh();
+          }
+        } catch (e) {
+          this._logger.error(`Error in open-state-changed: ${e}`);
         }
       });
     }
@@ -903,7 +922,11 @@ var Indicator = GObject.registerClass(
         GLib2.PRIORITY_DEFAULT,
         intervalSeconds,
         () => {
-          this._refresh();
+          try {
+            this._refresh();
+          } catch (e) {
+            this._logger.error(`Error in refresh timer: ${e}`);
+          }
           return GLib2.SOURCE_CONTINUE;
         }
       );
@@ -916,6 +939,7 @@ var Indicator = GObject.registerClass(
       }
     }
     _refresh() {
+      console.log("[SymfonyMenubar] Sp\xFA\u0161\u0165am _refresh...");
       if (this.menu.isOpen) {
         this._pendingRefresh = true;
         this._logger.info("Menu is open \u2013 deferring refresh");
@@ -926,45 +950,71 @@ var Indicator = GObject.registerClass(
     _doRefresh() {
       this._pendingRefresh = false;
       this._fetchData().then((data) => {
-        this._menuBuilder.buildMenu(
-          this.menu,
-          data,
-          this._cliManager,
-          this._extension
-        );
+        try {
+          this._menuBuilder.buildMenu(
+            this.menu,
+            data,
+            this._cliManager,
+            this._extension
+          );
+        } catch (e) {
+          this._logger.error(`Error building menu: ${e}`);
+          this._showErrorMenu(e);
+        }
       }).catch((e) => {
         this._logger.error(`Menu refresh failed: ${e}`);
+        this._showErrorMenu(e);
       });
     }
+    _showErrorMenu(error) {
+      try {
+        this.menu.removeAll();
+        this.menu.addMenuItem(new PopupMenu.PopupMenuItem(`Chyba: Pozri logy`, {
+          reactive: false
+        }));
+        this._logger.error(`UI Fallback triggered due to: ${error}`);
+      } catch (e) {
+        this._logger.error(`Critical error in _showErrorMenu: ${e}`);
+      }
+    }
     async _fetchData() {
-      const [phpResult, serverResult, proxyResult] = await Promise.allSettled([
-        this._cliManager.runCommand("local:php:list"),
-        this._cliManager.runCommand("server:list"),
-        this._cliManager.runCommand("proxy:status")
-      ]);
-      if (phpResult.status === "rejected") {
-        this._logger.warn(`local:php:list failed: ${phpResult.reason}`);
+      try {
+        const [phpResult, serverResult, proxyResult] = await Promise.allSettled([
+          this._cliManager.runCommand("local:php:list"),
+          this._cliManager.runCommand("server:list"),
+          this._cliManager.runCommand("proxy:status")
+        ]);
+        if (phpResult.status === "rejected") {
+          this._logger.warn(`local:php:list failed: ${phpResult.reason}`);
+        }
+        if (serverResult.status === "rejected") {
+          this._logger.warn(`server:list failed: ${serverResult.reason}`);
+        }
+        if (proxyResult.status === "rejected") {
+          this._logger.warn(`proxy:status failed: ${proxyResult.reason}`);
+        }
+        const phpVersions = phpResult.status === "fulfilled" ? phpResult.value : [];
+        const servers = serverResult.status === "fulfilled" ? serverResult.value : [];
+        const proxyStatus = proxyResult.status === "fulfilled" ? proxyResult.value : { isRunning: false, proxies: [] };
+        const phpInfoMap = /* @__PURE__ */ new Map();
+        await Promise.allSettled(
+          phpVersions.filter((v) => v.path).map(async (v) => {
+            try {
+              const info = await this._cliManager.runCommand("php:info", [
+                v.path
+              ]);
+              phpInfoMap.set(v.version, info);
+            } catch (e) {
+              this._logger.error(`Failed to fetch PHP info for ${v.version}: ${e}`);
+            }
+          })
+        );
+        const cliAvailable = phpVersions.length > 0 || servers.length > 0 || proxyStatus.proxies.length > 0;
+        return { phpVersions, phpInfoMap, servers, proxyStatus, cliAvailable };
+      } catch (e) {
+        this._logger.error(`Error in _fetchData: ${e}`);
+        throw e;
       }
-      if (serverResult.status === "rejected") {
-        this._logger.warn(`server:list failed: ${serverResult.reason}`);
-      }
-      if (proxyResult.status === "rejected") {
-        this._logger.warn(`proxy:status failed: ${proxyResult.reason}`);
-      }
-      const phpVersions = phpResult.status === "fulfilled" ? phpResult.value : [];
-      const servers = serverResult.status === "fulfilled" ? serverResult.value : [];
-      const proxyStatus = proxyResult.status === "fulfilled" ? proxyResult.value : { isRunning: false, proxies: [] };
-      const phpInfoMap = /* @__PURE__ */ new Map();
-      await Promise.allSettled(
-        phpVersions.filter((v) => v.path).map(async (v) => {
-          const info = await this._cliManager.runCommand("php:info", [
-            v.path
-          ]);
-          phpInfoMap.set(v.version, info);
-        })
-      );
-      const cliAvailable = phpVersions.length > 0 || servers.length > 0 || proxyStatus.proxies.length > 0;
-      return { phpVersions, phpInfoMap, servers, proxyStatus, cliAvailable };
     }
     destroy() {
       this.stopRefresh();
@@ -977,19 +1027,28 @@ var Indicator = GObject.registerClass(
 var SymfonyMenubarExtension = class extends Extension {
   _indicator;
   enable() {
-    const logger = new ConsoleLogger();
-    const processRunner = new GjsProcessRunner(logger);
-    const cliManager = new SymfonyCliManager(processRunner);
-    cliManager.setLogger(logger);
-    logger.info("Symfony Menubar Extension Enabled");
-    this._indicator = new Indicator(cliManager, logger, this);
-    Main.panel.addToStatusArea("symfony-menubar", this._indicator);
-    this._indicator.startRefresh(10);
+    try {
+      const logger = new ConsoleLogger();
+      const processRunner = new GjsProcessRunner(logger);
+      const cliManager = new SymfonyCliManager(processRunner);
+      cliManager.setLogger(logger);
+      logger.info("Symfony Menubar Extension Enabled");
+      this._indicator = new Indicator(cliManager, logger, this);
+      Main.panel.addToStatusArea("symfony-menubar", this._indicator);
+      this._indicator.startRefresh(10);
+    } catch (e) {
+      console.error(`[SymfonyMenubar] Failed to enable extension: ${e}`);
+    }
   }
   disable() {
-    this._indicator?.stopRefresh();
-    this._indicator?.destroy();
-    this._indicator = void 0;
+    try {
+      this._indicator?.stopRefresh();
+      this._indicator?.destroy();
+      this._indicator = void 0;
+      console.log("Symfony Menubar Disabled");
+    } catch (e) {
+      console.error(`[SymfonyMenubar] Error during disable: ${e}`);
+    }
   }
 };
 export {

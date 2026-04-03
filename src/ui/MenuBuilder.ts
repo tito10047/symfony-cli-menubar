@@ -26,7 +26,13 @@ export class MenuBuilder {
         cliManager: SymfonyCliManager,
         extension: ExtensionRef
     ): void {
+        console.log('[SymfonyMenubar] buildMenu zavolané!');
         menu.removeAll();
+
+        // STATICKÝ TEST - Toto tam musí ostať, kým neuvidíme menu!
+        const testItem = new PopupMenu.PopupMenuItem('Test - Menu funguje!');
+        menu.addMenuItem(testItem);
+        console.log('[SymfonyMenubar] Testovacia položka pridaná.');
 
         this._buildHeader(menu);
         menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());

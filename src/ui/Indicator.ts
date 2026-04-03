@@ -27,6 +27,7 @@ export const Indicator = GObject.registerClass(
             extension: ExtensionRef
         ): void {
             super._init(0.0, 'Symfony CLI Menubar', false);
+            console.log('[SymfonyMenubar] Indicator inicializovaný');
 
             this._cliManager = cliManager;
             this._logger = logger;
@@ -42,8 +43,12 @@ export const Indicator = GObject.registerClass(
 
             // Anti-flicker: execute pending refresh after menu closes
             this.menu.connect('open-state-changed', (_menu: any, isOpen: boolean) => {
-                if (!isOpen && this._pendingRefresh) {
-                    this._doRefresh();
+                try {
+                    if (!isOpen && this._pendingRefresh) {
+                        this._doRefresh();
+                    }
+                } catch (e) {
+                    this._logger.error(`Error in open-state-changed: ${e}`);
                 }
             });
         }
@@ -53,7 +58,11 @@ export const Indicator = GObject.registerClass(
                 GLib.PRIORITY_DEFAULT,
                 intervalSeconds,
                 () => {
-                    this._refresh();
+                    try {
+                        this._refresh();
+                    } catch (e) {
+                        this._logger.error(`Error in refresh timer: ${e}`);
+                    }
                     return GLib.SOURCE_CONTINUE;
                 }
             );
@@ -69,6 +78,7 @@ export const Indicator = GObject.registerClass(
         }
 
         private _refresh(): void {
+            console.log('[SymfonyMenubar] Spúšťam _refresh...');
             if (this.menu.isOpen) {
                 this._pendingRefresh = true;
                 this._logger.info('Menu is open – deferring refresh');
@@ -81,63 +91,90 @@ export const Indicator = GObject.registerClass(
             this._pendingRefresh = false;
             this._fetchData()
                 .then(data => {
-                    this._menuBuilder.buildMenu(
-                        this.menu,
-                        data,
-                        this._cliManager,
-                        this._extension
-                    );
+                    try {
+                        this._menuBuilder.buildMenu(
+                            this.menu,
+                            data,
+                            this._cliManager,
+                            this._extension
+                        );
+                    } catch (e) {
+                        this._logger.error(`Error building menu: ${e}`);
+                        this._showErrorMenu(e);
+                    }
                 })
                 .catch(e => {
                     this._logger.error(`Menu refresh failed: ${e}`);
+                    this._showErrorMenu(e);
                 });
         }
 
+        private _showErrorMenu(error: any): void {
+            try {
+                this.menu.removeAll();
+                this.menu.addMenuItem(new PopupMenu.PopupMenuItem(`Chyba: Pozri logy`, {
+                    reactive: false
+                }));
+                this._logger.error(`UI Fallback triggered due to: ${error}`);
+            } catch (e) {
+                this._logger.error(`Critical error in _showErrorMenu: ${e}`);
+            }
+        }
+
         private async _fetchData(): Promise<MenuData> {
-            const [phpResult, serverResult, proxyResult] = await Promise.allSettled([
-                this._cliManager.runCommand<PhpVersion[]>('local:php:list'),
-                this._cliManager.runCommand<SymfonyServer[]>('server:list'),
-                this._cliManager.runCommand<ProxyStatus>('proxy:status'),
-            ]);
+            try {
+                const [phpResult, serverResult, proxyResult] = await Promise.allSettled([
+                    this._cliManager.runCommand<PhpVersion[]>('local:php:list'),
+                    this._cliManager.runCommand<SymfonyServer[]>('server:list'),
+                    this._cliManager.runCommand<ProxyStatus>('proxy:status'),
+                ]);
 
-            if (phpResult.status === 'rejected') {
-                this._logger.warn(`local:php:list failed: ${phpResult.reason}`);
+                if (phpResult.status === 'rejected') {
+                    this._logger.warn(`local:php:list failed: ${phpResult.reason}`);
+                }
+                if (serverResult.status === 'rejected') {
+                    this._logger.warn(`server:list failed: ${serverResult.reason}`);
+                }
+                if (proxyResult.status === 'rejected') {
+                    this._logger.warn(`proxy:status failed: ${proxyResult.reason}`);
+                }
+
+                const phpVersions: PhpVersion[] =
+                    phpResult.status === 'fulfilled' ? (phpResult.value as PhpVersion[]) : [];
+                const servers: SymfonyServer[] =
+                    serverResult.status === 'fulfilled' ? (serverResult.value as SymfonyServer[]) : [];
+                const proxyStatus: ProxyStatus =
+                    proxyResult.status === 'fulfilled'
+                        ? (proxyResult.value as ProxyStatus)
+                        : { isRunning: false, proxies: [] };
+
+                // Fetch PHP info for each version in parallel; ignore individual failures
+                const phpInfoMap = new Map<string, PhpInfo>();
+                await Promise.allSettled(
+                    phpVersions
+                        .filter(v => v.path)
+                        .map(async v => {
+                            try {
+                                const info = await this._cliManager.runCommand<PhpInfo>('php:info', [
+                                    v.path,
+                                ]);
+                                phpInfoMap.set(v.version, info);
+                            } catch (e) {
+                                this._logger.error(`Failed to fetch PHP info for ${v.version}: ${e}`);
+                            }
+                        })
+                );
+
+                const cliAvailable =
+                    phpVersions.length > 0 ||
+                    servers.length > 0 ||
+                    proxyStatus.proxies.length > 0;
+
+                return { phpVersions, phpInfoMap, servers, proxyStatus, cliAvailable };
+            } catch (e) {
+                this._logger.error(`Error in _fetchData: ${e}`);
+                throw e;
             }
-            if (serverResult.status === 'rejected') {
-                this._logger.warn(`server:list failed: ${serverResult.reason}`);
-            }
-            if (proxyResult.status === 'rejected') {
-                this._logger.warn(`proxy:status failed: ${proxyResult.reason}`);
-            }
-
-            const phpVersions: PhpVersion[] =
-                phpResult.status === 'fulfilled' ? phpResult.value : [];
-            const servers: SymfonyServer[] =
-                serverResult.status === 'fulfilled' ? serverResult.value : [];
-            const proxyStatus: ProxyStatus =
-                proxyResult.status === 'fulfilled'
-                    ? proxyResult.value
-                    : { isRunning: false, proxies: [] };
-
-            // Fetch PHP info for each version in parallel; ignore individual failures
-            const phpInfoMap = new Map<string, PhpInfo>();
-            await Promise.allSettled(
-                phpVersions
-                    .filter(v => v.path)
-                    .map(async v => {
-                        const info = await this._cliManager.runCommand<PhpInfo>('php:info', [
-                            v.path,
-                        ]);
-                        phpInfoMap.set(v.version, info);
-                    })
-            );
-
-            const cliAvailable =
-                phpVersions.length > 0 ||
-                servers.length > 0 ||
-                proxyStatus.proxies.length > 0;
-
-            return { phpVersions, phpInfoMap, servers, proxyStatus, cliAvailable };
         }
 
         destroy(): void {
