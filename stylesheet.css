@@ -1,1 +1,36 @@
-/* Main stylesheet for Symfony Menubar Extension */
+/* Symfony CLI Menubar Extension */
+
+.symfony-header-box {
+    padding: 2px 0;
+}
+
+.section-title {
+    font-size: 0.85em;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #aaaaaa;
+    padding: 4px 0;
+}
+
+.small-gray-text {
+    font-size: 0.8em;
+    color: #888888;
+}
+
+.green-text {
+    color: #2ecc71;
+}
+
+.red-text {
+    color: #e74c3c;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+}
+
+.cli-error-item {
+    color: #e74c3c;
+}

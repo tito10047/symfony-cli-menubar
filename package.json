@@ -5,7 +5,7 @@
   "main": "dist/extension.js",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --format=esm --external:gi://*",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --format=esm --external:gi://* --external:resource://*",
     "watch": "npm run build -- --watch",
     "test": "jest tests/unit",
     "test:integration": "RUN_INTEGRATION=1 jest tests/integration",
