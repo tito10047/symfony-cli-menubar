@@ -1,15 +1,24 @@
 import { PhpListCommand } from '../../../src/core/commands/PhpListCommand';
 import { ProcessRunnerInterface } from '../../../src/core/interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from '../../../src/core/interfaces/LoggerInterface';
 
 describe('PhpListCommand', () => {
     let mockProcessRunner: jest.Mocked<ProcessRunnerInterface>;
+    let mockLogger: jest.Mocked<LoggerInterface>;
     let command: PhpListCommand;
 
     beforeEach(() => {
         mockProcessRunner = {
             run: jest.fn(),
         };
+        mockLogger = {
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        };
         command = new PhpListCommand(mockProcessRunner);
+        command.setLogger(mockLogger);
     });
 
     it('should have the correct name', () => {
@@ -64,5 +73,32 @@ describe('PhpListCommand', () => {
         expect(result).toHaveLength(2);
         expect(result[0].isDefault).toBe(true);
         expect(result[1].isDefault).toBe(true);
+    });
+
+    it('should log warning when no versions are found', async () => {
+        mockProcessRunner.run.mockResolvedValue('');
+
+        await command.execute();
+
+        expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No PHP versions found'));
+    });
+
+    it('should log info when command starts', async () => {
+        mockProcessRunner.run.mockResolvedValue('8.2 /usr/bin/php');
+
+        await command.execute();
+
+        expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Executing command local:php:list'));
+    });
+
+    it('should log error and throw when process runner fails', async () => {
+        const error = new Error('Process failed');
+        mockProcessRunner.run.mockRejectedValue(error);
+
+        await expect(command.execute()).rejects.toThrow('Process failed');
+        expect(mockLogger.error).toHaveBeenCalledWith(
+            expect.stringContaining('Command local:php:list failed'),
+            error
+        );
     });
 });

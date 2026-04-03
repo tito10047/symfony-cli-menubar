@@ -1,5 +1,6 @@
 import { SymfonyCommandInterface } from '../interfaces/SymfonyCommandInterface';
 import { ProcessRunnerInterface } from '../interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from '../interfaces/LoggerInterface';
 
 export interface SymfonyServer {
     directory: string;
@@ -21,59 +22,81 @@ interface SymfonyCliServer {
 }
 
 export class ServerListCommand implements SymfonyCommandInterface<SymfonyServer[]> {
+    private logger?: LoggerInterface;
+
     constructor(private processRunner: ProcessRunnerInterface) {}
 
     getName(): string {
         return 'server:list';
     }
 
+    setLogger(logger: LoggerInterface): void {
+        this.logger = logger;
+    }
+
     async execute(args: string[] = []): Promise<SymfonyServer[]> {
-        const commandArgs = ['server:list', '--no-ansi', ...args];
-        const output = await this.processRunner.run(commandArgs);
+        const commandName = this.getName();
+        this.logger?.info(`Executing command ${commandName}`);
 
-        const servers: SymfonyServer[] = [];
-        const lines = output.split('\n');
+        try {
+            const commandArgs = ['server:list', '--no-ansi', ...args];
+            const output = await this.processRunner.run(commandArgs);
 
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('+') || trimmed.startsWith('-') ||
-                trimmed.includes('Directory') || !trimmed.includes('|')) {
-                continue;
+            if (!output || output.trim() === '') {
+                this.logger?.warn(`No servers found (empty output) for ${commandName}`);
             }
 
-            const columns = trimmed.split('|')
-                .map(c => c.trim())
-                .filter(c => c !== '');
+            const servers: SymfonyServer[] = [];
+            const lines = output.split('\n');
 
-            if (columns.length < 2) continue;
-
-            const directory = columns[0];
-            const portStr = columns[1];
-
-            let port = 8000;
-            let isRunning = false;
-
-            if (portStr.toLowerCase() === 'not running') {
-                isRunning = false;
-            } else {
-                const p = parseInt(portStr, 10);
-                if (!isNaN(p)) {
-                    port = p;
-                    isRunning = true;
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('+') || trimmed.startsWith('-') ||
+                    trimmed.includes('Directory') || !trimmed.includes('|')) {
+                    continue;
                 }
+
+                const columns = trimmed.split('|')
+                    .map(c => c.trim())
+                    .filter(c => c !== '');
+
+                if (columns.length < 2) continue;
+
+                const directory = columns[0];
+                const portStr = columns[1];
+
+                let port = 8000;
+                let isRunning = false;
+
+                if (portStr.toLowerCase() === 'not running') {
+                    isRunning = false;
+                } else {
+                    const p = parseInt(portStr, 10);
+                    if (!isNaN(p)) {
+                        port = p;
+                        isRunning = true;
+                    }
+                }
+
+                // URL
+                const url = isRunning ? `https://127.0.0.1:${port}` : '';
+
+                servers.push({
+                    directory,
+                    port,
+                    url,
+                    isRunning
+                });
             }
 
-            // URL
-            const url = isRunning ? `https://127.0.0.1:${port}` : '';
+            if (servers.length === 0 && output.trim() !== '') {
+                this.logger?.warn(`No servers found in output of ${commandName}`);
+            }
 
-            servers.push({
-                directory,
-                port,
-                url,
-                isRunning
-            });
+            return servers;
+        } catch (error) {
+            this.logger?.error(`Command ${commandName} failed`, error);
+            throw error;
         }
-
-        return servers;
     }
 }

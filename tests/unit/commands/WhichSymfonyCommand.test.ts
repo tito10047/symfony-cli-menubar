@@ -1,15 +1,24 @@
 import { WhichSymfonyCommand } from '../../../src/core/commands/WhichSymfonyCommand';
 import { ProcessRunnerInterface } from '../../../src/core/interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from '../../../src/core/interfaces/LoggerInterface';
 
 describe('WhichSymfonyCommand', () => {
     let mockProcessRunner: jest.Mocked<ProcessRunnerInterface>;
+    let mockLogger: jest.Mocked<LoggerInterface>;
     let command: WhichSymfonyCommand;
 
     beforeEach(() => {
         mockProcessRunner = {
             run: jest.fn(),
         };
+        mockLogger = {
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        };
         command = new WhichSymfonyCommand(mockProcessRunner);
+        command.setLogger(mockLogger);
     });
 
     it('should have the correct name', () => {

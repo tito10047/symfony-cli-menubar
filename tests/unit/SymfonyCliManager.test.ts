@@ -1,17 +1,23 @@
 import { SymfonyCliManager } from '../../src/core/SymfonyCliManager';
 import { SymfonyCommandInterface } from '../../src/core/interfaces/SymfonyCommandInterface';
+import { ProcessRunnerInterface } from '../../src/core/interfaces/ProcessRunnerInterface';
 
 describe('SymfonyCliManager', () => {
     let manager: SymfonyCliManager;
+    let mockProcessRunner: jest.Mocked<ProcessRunnerInterface>;
 
     beforeEach(() => {
-        manager = new SymfonyCliManager();
+        mockProcessRunner = {
+            run: jest.fn(),
+        };
+        manager = new SymfonyCliManager(mockProcessRunner);
     });
 
     it('should register and run a command', async () => {
         const mockCommand: jest.Mocked<SymfonyCommandInterface<string>> = {
             getName: jest.fn().mockReturnValue('test:command'),
             execute: jest.fn().mockResolvedValue('command result'),
+            setLogger: jest.fn(),
         };
 
         manager.registerCommand(mockCommand);
@@ -32,6 +38,7 @@ describe('SymfonyCliManager', () => {
             execute: jest.fn().mockImplementation((args?: string[]) => {
                 return Promise.resolve(`result with ${args?.join(',')}`);
             }),
+            setLogger: jest.fn(),
         };
 
         manager.registerCommand(mockCommand);

@@ -1,5 +1,6 @@
 import { SymfonyCommandInterface } from './interfaces/SymfonyCommandInterface';
 import { ProcessRunnerInterface } from './interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from './interfaces/LoggerInterface';
 import { VersionCommand } from './commands/VersionCommand';
 import { ServerListCommand } from './commands/ServerListCommand';
 import { PhpListCommand } from './commands/PhpListCommand';
@@ -13,6 +14,7 @@ import { WhichSymfonyCommand } from './commands/WhichSymfonyCommand';
 
 export class SymfonyCliManager {
     private commands: Map<string, SymfonyCommandInterface<any>> = new Map();
+    private logger?: LoggerInterface;
 
     constructor(processRunner: ProcessRunnerInterface) {
         this.registerCommand(new VersionCommand(processRunner));
@@ -27,13 +29,24 @@ export class SymfonyCliManager {
         this.registerCommand(new WhichSymfonyCommand(processRunner));
     }
 
+    setLogger(logger: LoggerInterface): void {
+        this.logger = logger;
+        for (const command of this.commands.values()) {
+            command.setLogger(logger);
+        }
+    }
+
     registerCommand(command: SymfonyCommandInterface<any>): void {
+        if (this.logger) {
+            command.setLogger(this.logger);
+        }
         this.commands.set(command.getName(), command);
     }
 
     async runCommand<T>(commandName: string, args?: string[]): Promise<T> {
         const command = this.commands.get(commandName);
         if (!command) {
+            this.logger?.error(`Command ${commandName} not found`);
             throw new Error(`Command ${commandName} not found`);
         }
 

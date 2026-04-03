@@ -1,15 +1,24 @@
 import { ProxyStatusCommand } from '../../../src/core/commands/ProxyStatusCommand';
 import { ProcessRunnerInterface } from '../../../src/core/interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from '../../../src/core/interfaces/LoggerInterface';
 
 describe('ProxyStatusCommand', () => {
     let mockProcessRunner: jest.Mocked<ProcessRunnerInterface>;
+    let mockLogger: jest.Mocked<LoggerInterface>;
     let command: ProxyStatusCommand;
 
     beforeEach(() => {
         mockProcessRunner = {
             run: jest.fn(),
         };
+        mockLogger = {
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        };
         command = new ProxyStatusCommand(mockProcessRunner);
+        command.setLogger(mockLogger);
     });
 
     it('should have the correct name', () => {

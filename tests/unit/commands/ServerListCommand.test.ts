@@ -1,15 +1,24 @@
 import { ServerListCommand } from '../../../src/core/commands/ServerListCommand';
 import { ProcessRunnerInterface } from '../../../src/core/interfaces/ProcessRunnerInterface';
+import { LoggerInterface } from '../../../src/core/interfaces/LoggerInterface';
 
 describe('ServerListCommand', () => {
     let mockProcessRunner: jest.Mocked<ProcessRunnerInterface>;
+    let mockLogger: jest.Mocked<LoggerInterface>;
     let command: ServerListCommand;
 
     beforeEach(() => {
         mockProcessRunner = {
             run: jest.fn(),
         };
+        mockLogger = {
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        };
         command = new ServerListCommand(mockProcessRunner);
+        command.setLogger(mockLogger);
     });
 
     it('should have the correct name', () => {
