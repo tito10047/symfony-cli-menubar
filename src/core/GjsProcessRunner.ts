@@ -8,20 +8,35 @@ import { LoggerInterface } from './interfaces/LoggerInterface';
  * This class is designed to run in a GJS (GNOME JavaScript) environment.
  */
 export class GjsProcessRunner implements ProcessRunnerInterface {
+    private binaryPath: string;
+
     /**
      * @param logger The logger to record command execution and results.
+     * @param binaryPath Default binary to run (e.g., 'symfony'). Defaults to 'symfony'.
      */
-    constructor(private logger: LoggerInterface) {}
+    constructor(private logger: LoggerInterface, binaryPath: string = 'symfony') {
+        this.binaryPath = binaryPath;
+    }
 
     /**
      * Executes a command with arguments asynchronously and returns the stdout.
      * 
-     * @param args Array containing the command and its arguments (e.g., ['ls', '-la']).
+     * @param command Array containing the arguments (e.g., ['ls', '-la'] or just ['-la'] if binary is set).
      * @returns A promise that resolves to the stdout string on success.
      * @throws Error if the process fails or returns a non-zero exit code.
      */
-    async run(args: string[]): Promise<string> {
-        const commandLine = args.join(' ');
+    async run(command: string[]): Promise<string> {
+        let binary = this.binaryPath;
+        let args = command;
+
+        // If the first argument is an absolute path, use it as binary
+        if (command.length > 0 && command[0].startsWith('/')) {
+            binary = command[0];
+            args = command.slice(1);
+        }
+
+        const fullArgs = [binary, ...args];
+        const commandLine = fullArgs.join(' ');
         this.logger.info(`Running command: ${commandLine}`);
 
         return new Promise((resolve, reject) => {
@@ -31,7 +46,7 @@ export class GjsProcessRunner implements ProcessRunnerInterface {
                 // Create a new subprocess with stdout and stderr pipes.
                 // This might throw if the binary is not found in PATH or other OS errors occur.
                 proc = Gio.Subprocess.new(
-                    args,
+                    fullArgs,
                     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
                 );
             } catch (error) {

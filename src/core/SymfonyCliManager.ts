@@ -11,6 +11,8 @@ import { ProxyStartCommand } from './commands/ProxyStartCommand';
 import { ProxyStopCommand } from './commands/ProxyStopCommand';
 import { ProxyDomainDetachCommand } from './commands/ProxyDomainDetachCommand';
 import { WhichSymfonyCommand } from './commands/WhichSymfonyCommand';
+import { PhpInfoCommand } from './commands/PhpInfoCommand';
+import { OpenLogCommand } from './commands/OpenLogCommand';
 
 export class SymfonyCliManager {
     private commands: Map<string, SymfonyCommandInterface<any>> = new Map();
@@ -27,6 +29,8 @@ export class SymfonyCliManager {
         this.registerCommand(new ProxyStopCommand(processRunner));
         this.registerCommand(new ProxyDomainDetachCommand(processRunner));
         this.registerCommand(new WhichSymfonyCommand(processRunner));
+        this.registerCommand(new PhpInfoCommand(processRunner));
+        this.registerCommand(new OpenLogCommand(processRunner));
     }
 
     setLogger(logger: LoggerInterface): void {
