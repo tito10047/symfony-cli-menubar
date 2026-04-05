@@ -8,11 +8,12 @@ const RUNNING_COLOR = '#4ade80';
 const STOPPED_COLOR = '#888888';
 
 export interface ServerMenuItemParams {
+    directory: string;
     name: string;
     port: string;
     isRunning: boolean;
-    /** When true, the submenu includes an "Add to favorites" action. */
     isFavorite: boolean;
+    onToggleFavorite?: (directory: string) => void;
 }
 
 const ServerMenuItem = GObject.registerClass(
@@ -21,6 +22,8 @@ const ServerMenuItem = GObject.registerClass(
         declare _portLabel: InstanceType<typeof St.Label> | null;
         declare _isRunning: boolean;
         declare _isFavorite: boolean;
+        declare _directory: string;
+        declare _onToggleFavorite: ((directory: string) => void) | undefined;
 
         _init(params: ServerMenuItemParams) {
             super._init(params.name);
@@ -28,6 +31,8 @@ const ServerMenuItem = GObject.registerClass(
 
             this._isRunning = params.isRunning;
             this._isFavorite = params.isFavorite;
+            this._directory = params.directory;
+            this._onToggleFavorite = params.onToggleFavorite;
             this._portLabel = null;
 
             // Status dot — inserted directly before the name label.
@@ -100,10 +105,11 @@ const ServerMenuItem = GObject.registerClass(
             this.menu.addMenuItem(new PopupMenuItem('📋 Copy URL'));
             this.menu.addMenuItem(new PopupMenuItem('📄 View logs'));
 
-            if (this._isFavorite) {
-                this.menu.addMenuItem(new PopupSeparatorMenuItem());
-                this.menu.addMenuItem(new PopupMenuItem('⭐ Add to favorites'));
-            }
+            this.menu.addMenuItem(new PopupSeparatorMenuItem());
+            const label = this._isFavorite ? '⭐ Remove from favorites' : '☆ Add to favorites';
+            const favItem = new PopupMenuItem(label);
+            favItem.connect('activate', () => this._onToggleFavorite?.(this._directory));
+            this.menu.addMenuItem(favItem);
         }
     }
 );

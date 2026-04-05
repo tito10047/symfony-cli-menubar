@@ -91,6 +91,8 @@ var ServerMenuItem = GObject2.registerClass(
       this.label.set_x_expand(true);
       this._isRunning = params.isRunning;
       this._isFavorite = params.isFavorite;
+      this._directory = params.directory;
+      this._onToggleFavorite = params.onToggleFavorite;
       this._portLabel = null;
       this._dot = new St2.Label({
         text: "\u25CF  ",
@@ -148,10 +150,11 @@ var ServerMenuItem = GObject2.registerClass(
       this.menu.addMenuItem(new PopupSeparatorMenuItem());
       this.menu.addMenuItem(new PopupMenuItem("\u{1F4CB} Copy URL"));
       this.menu.addMenuItem(new PopupMenuItem("\u{1F4C4} View logs"));
-      if (this._isFavorite) {
-        this.menu.addMenuItem(new PopupSeparatorMenuItem());
-        this.menu.addMenuItem(new PopupMenuItem("\u2B50 Add to favorites"));
-      }
+      this.menu.addMenuItem(new PopupSeparatorMenuItem());
+      const label = this._isFavorite ? "\u2B50 Remove from favorites" : "\u2606 Add to favorites";
+      const favItem = new PopupMenuItem(label);
+      favItem.connect("activate", () => this._onToggleFavorite?.(this._directory));
+      this.menu.addMenuItem(favItem);
     }
   }
 );
@@ -162,20 +165,25 @@ import * as PopupMenu2 from "resource:///org/gnome/shell/ui/popupMenu.js";
 var FavoriteServersGroup = GObject3.registerClass(
   class FavoriteServersGroup2 extends PopupMenu2.PopupSubMenuMenuItem {
     _init() {
-      super._init("\u{1F4C1} Other favorite servers");
+      super._init("\u{1F4C1} Other servers");
       this._serverMap = /* @__PURE__ */ new Map();
     }
     /**
-     * Creates a new ServerMenuItem, registers it under `directory` as the
+     * Registers a pre-created ServerMenuItem under `directory` as the
      * canonical key (matches SymfonyServer.directory), and appends it to the submenu.
      */
-    addServer(directory, params) {
-      const item = new ServerMenuItem(params);
+    addServer(directory, item) {
       this._serverMap.set(directory, item);
       this.menu.addMenuItem(item);
     }
     getServer(directory) {
       return this._serverMap.get(directory);
+    }
+    removeServer(directory) {
+      const item = this._serverMap.get(directory);
+      if (!item) return;
+      item.destroy();
+      this._serverMap.delete(directory);
     }
     /** Destroys all child items and clears the internal map. */
     clear() {
@@ -272,9 +280,10 @@ function createSectionHeader(text, options) {
 // src/ui/Indicator.ts
 var Indicator = GObject5.registerClass(
   class Indicator2 extends Button {
-    _init(params = {}) {
+    _init(params) {
       super._init(0, "Symfony Menubar", false);
-      this._mainServerItems = /* @__PURE__ */ new Map();
+      this._favoritesRepository = params.favoritesRepository;
+      this._onRefresh = params.onRefresh;
       const topLabel = new St5.Label({
         text: "sf",
         y_align: Clutter4.ActorAlign.CENTER
@@ -286,35 +295,10 @@ var Indicator = GObject5.registerClass(
       menu.addMenuItem(this._phpSection);
       menu.addMenuItem(new PopupSeparatorMenuItem2());
       menu.addMenuItem(createSectionHeader("Servers"));
-      const server1 = new ServerMenuItem({
-        name: "my-super-project",
-        port: "8000",
-        isRunning: true,
-        isFavorite: false
-      });
-      const server2 = new ServerMenuItem({
-        name: "old-project",
-        port: "",
-        isRunning: false,
-        isFavorite: false
-      });
-      this._mainServerItems.set("my-super-project", server1);
-      this._mainServerItems.set("old-project", server2);
-      menu.addMenuItem(server1);
-      menu.addMenuItem(server2);
-      menu.addMenuItem(new PopupSeparatorMenuItem2());
-      this._favoriteServersGroup = new FavoriteServersGroup();
-      for (let i = 1; i <= 30; i++) {
-        const isRunning = i % 2 !== 0;
-        const port = isRunning ? String(8e3 + i) : "";
-        this._favoriteServersGroup.addServer(`project-${i}`, {
-          name: `project-${i}`,
-          port,
-          isRunning,
-          isFavorite: true
-        });
-      }
-      menu.addMenuItem(this._favoriteServersGroup);
+      this._serverSection = new PopupMenuSection();
+      menu.addMenuItem(this._serverSection);
+      this._otherServersGroup = new FavoriteServersGroup();
+      menu.addMenuItem(this._otherServersGroup);
       menu.addMenuItem(new PopupSeparatorMenuItem2());
       menu.addMenuItem(createSectionHeader("Proxy"));
       this._proxyItem = new ProxyMenuItem();
@@ -337,30 +321,36 @@ var Indicator = GObject5.registerClass(
       }
     }
     /**
-     * Reconciles the server list in-place: updates existing items, adds new
-     * ones to the favorites group. Does not remove items that disappeared
-     * from the list — call destroy() on this indicator for a full reset.
+     * Fully rebuilds the server sections from the given list.
+     * Favorite servers (by directory) are shown directly; others go into the
+     * collapsible "Other servers" group.
      */
     updateServerStatus(servers) {
+      this._serverSection.removeAll();
+      this._otherServersGroup.clear();
       for (const server of servers) {
-        const mainItem = this._mainServerItems.get(server.directory);
-        if (mainItem) {
-          mainItem.updateStatus(server.isRunning);
-          mainItem.updatePort(server.isRunning ? String(server.port) : "");
-          continue;
-        }
-        const favoriteItem = this._favoriteServersGroup.getServer(server.directory);
-        if (favoriteItem) {
-          favoriteItem.updateStatus(server.isRunning);
-          favoriteItem.updatePort(server.isRunning ? String(server.port) : "");
-          continue;
-        }
-        this._favoriteServersGroup.addServer(server.directory, {
-          name: server.directory,
+        const isFav = this._favoritesRepository.isFavorite(server.directory);
+        const name = server.directory.split("/").pop() ?? server.directory;
+        const item = new ServerMenuItem({
+          directory: server.directory,
+          name,
           port: server.isRunning ? String(server.port) : "",
           isRunning: server.isRunning,
-          isFavorite: true
+          isFavorite: isFav,
+          onToggleFavorite: (dir) => {
+            if (this._favoritesRepository.isFavorite(dir)) {
+              this._favoritesRepository.remove(dir);
+            } else {
+              this._favoritesRepository.add(dir);
+            }
+            this._onRefresh?.();
+          }
         });
+        if (isFav) {
+          this._serverSection.addMenuItem(item);
+        } else {
+          this._otherServersGroup.addServer(server.directory, item);
+        }
       }
     }
     /**
@@ -1012,6 +1002,34 @@ var ConsoleLogger = class {
   }
 };
 
+// src/core/services/FavoritesRepository.ts
+var FavoritesRepository = class {
+  constructor(settings) {
+    this.settings = settings;
+  }
+  settings;
+  getAll() {
+    return this.settings.get_strv("favorite-servers");
+  }
+  add(directory) {
+    const current = this.getAll();
+    if (current.includes(directory)) return;
+    this.settings.set_strv("favorite-servers", [...current, directory]);
+  }
+  remove(directory) {
+    this.settings.set_strv(
+      "favorite-servers",
+      this.getAll().filter((d) => d !== directory)
+    );
+  }
+  isFavorite(directory) {
+    return this.getAll().includes(directory);
+  }
+  onChange(callback) {
+    this.settings.connect("changed::favorite-servers", callback);
+  }
+};
+
 // src/extension.ts
 var REFRESH_INTERVAL_SECONDS = 30;
 var SymfonyMenubarExtension = class extends Extension {
@@ -1025,7 +1043,12 @@ var SymfonyMenubarExtension = class extends Extension {
     const runner = new GjsProcessRunner(this._logger);
     this._manager = new SymfonyCliManager(runner);
     this._manager.setLogger(this._logger);
-    this._indicator = new Indicator({ onRefresh: () => this._refresh() });
+    const settings = this.getSettings();
+    const favoritesRepository = new FavoritesRepository(settings);
+    this._indicator = new Indicator({
+      onRefresh: () => this._refresh(),
+      favoritesRepository
+    });
     Main.panel.addToStatusArea(this.uuid, this._indicator);
     this._refresh();
     this._refreshTimer = GLib.timeout_add_seconds(
@@ -1065,6 +1088,11 @@ var SymfonyMenubarExtension = class extends Extension {
       indicator.updatePhpStatus(versions, phpInfoMap);
     }).catch((err) => {
       this._logger?.error("PHP refresh failed:", err);
+    });
+    manager.runCommand("server:list").then((servers) => {
+      indicator.updateServerStatus(servers);
+    }).catch((err) => {
+      this._logger?.error("Server list refresh failed:", err);
     });
   }
 };

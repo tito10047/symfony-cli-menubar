@@ -4,5 +4,6 @@
   "description": "Manage your Symfony local servers from the top bar",
   "shell-version": [ "45", "46", "47", "48", "49", "50" ],
   "version": 1,
-  "type": "extension"
+  "type": "extension",
+  "settings-schema": "org.gnome.shell.extensions.symfony-menubar"
 }

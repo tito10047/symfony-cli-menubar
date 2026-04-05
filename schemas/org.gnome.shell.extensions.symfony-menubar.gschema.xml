@@ -16,5 +16,10 @@
       <summary>Show PHP version</summary>
       <description>Whether to show the PHP version in the menu.</description>
     </key>
+    <key name="favorite-servers" type="as">
+      <default>[]</default>
+      <summary>Favorite servers</summary>
+      <description>List of server directory paths marked as favorites.</description>
+    </key>
   </schema>
 </schemalist>

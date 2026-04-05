@@ -5,7 +5,7 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
 import { PhpVersionItem, PhpVersionItemType } from './components/PhpVersionItem.js';
-import { ServerMenuItem, ServerMenuItemType } from './components/ServerMenuItem.js';
+import { ServerMenuItem } from './components/ServerMenuItem.js';
 import { FavoriteServersGroup, FavoriteServersGroupType } from './components/FavoriteServersGroup.js';
 import { ProxyMenuItem, ProxyMenuItemType } from './components/ProxyMenuItem.js';
 import { createSectionHeader } from './components/SectionHeader.js';
@@ -14,18 +14,27 @@ import { PhpVersion } from '../core/commands/PhpListCommand.js';
 import { PhpInfo } from '../core/dto/PhpInfo.js';
 import { SymfonyServer } from '../core/commands/ServerListCommand.js';
 import { ProxyStatus } from '../core/commands/ProxyStatusCommand.js';
+import { FavoritesRepositoryInterface } from '../core/services/FavoritesRepository.js';
+
+interface IndicatorParams {
+    onRefresh?: () => void;
+    favoritesRepository: FavoritesRepositoryInterface;
+}
 
 export const Indicator = GObject.registerClass(
     class Indicator extends Button {
         declare _phpSection: InstanceType<typeof PopupMenuSection>;
-        declare _mainServerItems: Map<string, ServerMenuItemType>;
-        declare _favoriteServersGroup: FavoriteServersGroupType;
+        declare _serverSection: InstanceType<typeof PopupMenuSection>;
+        declare _otherServersGroup: FavoriteServersGroupType;
         declare _proxyItem: ProxyMenuItemType;
+        declare _favoritesRepository: FavoritesRepositoryInterface;
+        declare _onRefresh: (() => void) | undefined;
 
-        _init(params: { onRefresh?: () => void } = {}) {
+        _init(params: IndicatorParams) {
             super._init(0.0, 'Symfony Menubar', false);
 
-            this._mainServerItems = new Map();
+            this._favoritesRepository = params.favoritesRepository;
+            this._onRefresh = params.onRefresh;
 
             const topLabel = new St.Label({
                 text: 'sf',
@@ -37,45 +46,17 @@ export const Indicator = GObject.registerClass(
 
             // ---- PHP section ----
             menu.addMenuItem(createSectionHeader('PHP', { onRefresh: params.onRefresh }));
-
             this._phpSection = new PopupMenuSection();
             menu.addMenuItem(this._phpSection);
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Servers section ----
             menu.addMenuItem(createSectionHeader('Servers'));
+            this._serverSection = new PopupMenuSection();
+            menu.addMenuItem(this._serverSection);
 
-            const server1 = new ServerMenuItem({
-                name: 'my-super-project',
-                port: '8000',
-                isRunning: true,
-                isFavorite: false,
-            });
-            const server2 = new ServerMenuItem({
-                name: 'old-project',
-                port: '',
-                isRunning: false,
-                isFavorite: false,
-            });
-            this._mainServerItems.set('my-super-project', server1);
-            this._mainServerItems.set('old-project', server2);
-            menu.addMenuItem(server1);
-            menu.addMenuItem(server2);
-            menu.addMenuItem(new PopupSeparatorMenuItem());
-
-            // ---- Favorite servers collapsible group ----
-            this._favoriteServersGroup = new FavoriteServersGroup();
-            for (let i = 1; i <= 30; i++) {
-                const isRunning = i % 2 !== 0;
-                const port = isRunning ? String(8000 + i) : '';
-                this._favoriteServersGroup.addServer(`project-${i}`, {
-                    name: `project-${i}`,
-                    port,
-                    isRunning,
-                    isFavorite: true,
-                });
-            }
-            menu.addMenuItem(this._favoriteServersGroup);
+            this._otherServersGroup = new FavoriteServersGroup();
+            menu.addMenuItem(this._otherServersGroup);
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Proxy section ----
@@ -103,33 +84,38 @@ export const Indicator = GObject.registerClass(
         }
 
         /**
-         * Reconciles the server list in-place: updates existing items, adds new
-         * ones to the favorites group. Does not remove items that disappeared
-         * from the list — call destroy() on this indicator for a full reset.
+         * Fully rebuilds the server sections from the given list.
+         * Favorite servers (by directory) are shown directly; others go into the
+         * collapsible "Other servers" group.
          */
         updateServerStatus(servers: SymfonyServer[]): void {
+            this._serverSection.removeAll();
+            this._otherServersGroup.clear();
+
             for (const server of servers) {
-                const mainItem = this._mainServerItems.get(server.directory);
-                if (mainItem) {
-                    mainItem.updateStatus(server.isRunning);
-                    mainItem.updatePort(server.isRunning ? String(server.port) : '');
-                    continue;
-                }
-
-                const favoriteItem = this._favoriteServersGroup.getServer(server.directory);
-                if (favoriteItem) {
-                    favoriteItem.updateStatus(server.isRunning);
-                    favoriteItem.updatePort(server.isRunning ? String(server.port) : '');
-                    continue;
-                }
-
-                // Unknown server — add it to the favorites group.
-                this._favoriteServersGroup.addServer(server.directory, {
-                    name: server.directory,
+                const isFav = this._favoritesRepository.isFavorite(server.directory);
+                const name = server.directory.split('/').pop() ?? server.directory;
+                const item = new ServerMenuItem({
+                    directory: server.directory,
+                    name,
                     port: server.isRunning ? String(server.port) : '',
                     isRunning: server.isRunning,
-                    isFavorite: true,
+                    isFavorite: isFav,
+                    onToggleFavorite: (dir) => {
+                        if (this._favoritesRepository.isFavorite(dir)) {
+                            this._favoritesRepository.remove(dir);
+                        } else {
+                            this._favoritesRepository.add(dir);
+                        }
+                        this._onRefresh?.();
+                    },
                 });
+
+                if (isFav) {
+                    this._serverSection.addMenuItem(item);
+                } else {
+                    this._otherServersGroup.addServer(server.directory, item);
+                }
             }
         }
 

@@ -9,6 +9,8 @@ import { ConsoleLogger } from './core/logging/ConsoleLogger.js';
 import { LoggerInterface } from './core/interfaces/LoggerInterface.js';
 import { PhpVersion } from './core/commands/PhpListCommand.js';
 import { PhpInfo } from './core/dto/PhpInfo.js';
+import { SymfonyServer } from './core/commands/ServerListCommand.js';
+import { FavoritesRepository } from './core/services/FavoritesRepository.js';
 
 const REFRESH_INTERVAL_SECONDS = 30;
 
@@ -21,17 +23,22 @@ export default class SymfonyMenubarExtension extends Extension {
     enable(): void {
         this._logger = new ConsoleLogger();
         this._logger.info('Enabling extension');
+
         const runner = new GjsProcessRunner(this._logger);
         this._manager = new SymfonyCliManager(runner);
         this._manager.setLogger(this._logger);
 
-        this._indicator = new Indicator({ onRefresh: () => this._refresh() });
+        const settings = this.getSettings();
+        const favoritesRepository = new FavoritesRepository(settings);
+
+        this._indicator = new Indicator({
+            onRefresh: () => this._refresh(),
+            favoritesRepository,
+        });
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
-        // Prvý refresh ihneď
         this._refresh();
 
-        // Periodický refresh
         this._refreshTimer = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
             REFRESH_INTERVAL_SECONDS,
@@ -75,6 +82,14 @@ export default class SymfonyMenubarExtension extends Extension {
             })
             .catch(err => {
                 this._logger?.error('PHP refresh failed:', err);
+            });
+
+        manager.runCommand<SymfonyServer[]>('server:list')
+            .then(servers => {
+                indicator.updateServerStatus(servers);
+            })
+            .catch(err => {
+                this._logger?.error('Server list refresh failed:', err);
             });
     }
 }
