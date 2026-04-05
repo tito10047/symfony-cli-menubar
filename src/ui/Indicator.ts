@@ -1,6 +1,6 @@
 import GObject from 'gi://GObject';
 import { Button } from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import { PopupSeparatorMenuItem, PopupMenuSection, PopupBaseMenuItem } from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import { PopupSeparatorMenuItem, PopupMenuSection } from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
@@ -8,6 +8,7 @@ import { PhpVersionItem, PhpVersionItemType } from './components/PhpVersionItem.
 import { ServerMenuItem, ServerMenuItemType } from './components/ServerMenuItem.js';
 import { FavoriteServersGroup, FavoriteServersGroupType } from './components/FavoriteServersGroup.js';
 import { ProxyMenuItem, ProxyMenuItemType } from './components/ProxyMenuItem.js';
+import { createSectionHeader } from './components/SectionHeader.js';
 
 import { PhpVersion } from '../core/commands/PhpListCommand.js';
 import { PhpInfo } from '../core/dto/PhpInfo.js';
@@ -35,32 +36,14 @@ export const Indicator = GObject.registerClass(
             const menu = this.menu;
 
             // ---- PHP section ----
-            const phpHeader = new PopupBaseMenuItem({ reactive: false });
-            const phpHeaderLabel = new St.Label({
-                text: 'PHP',
-                style: 'font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.4); padding-top: 5px; padding-bottom: 2px;',
-                x_expand: true,
-            });
-            phpHeaderLabel.clutter_text.ellipsize = 0;
-            phpHeader.add_child(phpHeaderLabel);
-
-            if (params.onRefresh) {
-                const refreshBtn = new St.Button({
-                    label: '↺',
-                    reactive: true,
-                    style: 'font-size: 14px; color: rgba(255,255,255,0.5); padding: 0 4px;',
-                });
-                refreshBtn.connect('clicked', () => params.onRefresh!());
-                phpHeader.add_child(refreshBtn);
-            }
-            menu.addMenuItem(phpHeader);
+            menu.addMenuItem(createSectionHeader('PHP', { onRefresh: params.onRefresh }));
 
             this._phpSection = new PopupMenuSection();
             menu.addMenuItem(this._phpSection);
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Servers section ----
-            menu.addMenuItem(this._createSectionHeader('Servers'));
+            menu.addMenuItem(createSectionHeader('Servers'));
 
             const server1 = new ServerMenuItem({
                 name: 'my-super-project',
@@ -96,20 +79,9 @@ export const Indicator = GObject.registerClass(
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Proxy section ----
-            menu.addMenuItem(this._createSectionHeader('Proxy'));
+            menu.addMenuItem(createSectionHeader('Proxy'));
             this._proxyItem = new ProxyMenuItem();
             menu.addMenuItem(this._proxyItem);
-        }
-
-        private _createSectionHeader(text: string): InstanceType<typeof PopupBaseMenuItem> {
-            const header = new PopupBaseMenuItem({ reactive: false });
-            const label = new St.Label({
-                text: text.toUpperCase(),
-                style: 'font-size: 11px; font-weight: bold; color: rgba(255, 255, 255, 0.4); padding-top: 5px; padding-bottom: 2px;',
-            });
-            label.clutter_text.ellipsize = 0;
-            header.add_child(label);
-            return header;
         }
 
         // ---- Public update API ----

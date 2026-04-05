@@ -6,8 +6,8 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 // src/ui/Indicator.ts
 import GObject5 from "gi://GObject";
 import { Button } from "resource:///org/gnome/shell/ui/panelMenu.js";
-import { PopupSeparatorMenuItem as PopupSeparatorMenuItem2, PopupMenuSection, PopupBaseMenuItem as PopupBaseMenuItem2 } from "resource:///org/gnome/shell/ui/popupMenu.js";
-import St4 from "gi://St";
+import { PopupSeparatorMenuItem as PopupSeparatorMenuItem2, PopupMenuSection } from "resource:///org/gnome/shell/ui/popupMenu.js";
+import St5 from "gi://St";
 import Clutter4 from "gi://Clutter";
 
 // src/ui/components/PhpVersionItem.ts
@@ -237,40 +237,55 @@ var ProxyMenuItem = GObject4.registerClass(
   }
 );
 
+// src/ui/components/SectionHeader.ts
+import St4 from "gi://St";
+import { PopupBaseMenuItem as PopupBaseMenuItem2 } from "resource:///org/gnome/shell/ui/popupMenu.js";
+function createSectionHeader(text, options) {
+  const header = new PopupBaseMenuItem2({ reactive: false });
+  const label = new St4.Label({
+    text: text.toUpperCase(),
+    style: "font-size: 11px; font-weight: bold; color: rgba(255, 255, 255, 0.4); padding-top: 5px; padding-bottom: 2px;",
+    x_expand: true
+  });
+  label.clutter_text.ellipsize = 0;
+  header.add_child(label);
+  if (options?.onRefresh) {
+    const btn = new St4.Button({
+      label: "\u21BA",
+      reactive: true,
+      track_hover: true,
+      style: "font-size: 14px; color: rgba(255,255,255,0.5); padding: 0 4px;"
+    });
+    btn.connect("notify::hover", () => {
+      if (btn.hover) {
+        btn.set_style("font-size: 14px; color: rgba(255,255,255,0.9); padding: 0 4px;");
+      } else {
+        btn.set_style("font-size: 14px; color: rgba(255,255,255,0.5); padding: 0 4px;");
+      }
+    });
+    btn.connect("clicked", options.onRefresh);
+    header.add_child(btn);
+  }
+  return header;
+}
+
 // src/ui/Indicator.ts
 var Indicator = GObject5.registerClass(
   class Indicator2 extends Button {
     _init(params = {}) {
       super._init(0, "Symfony Menubar", false);
       this._mainServerItems = /* @__PURE__ */ new Map();
-      const topLabel = new St4.Label({
+      const topLabel = new St5.Label({
         text: "sf",
         y_align: Clutter4.ActorAlign.CENTER
       });
       this.add_child(topLabel);
       const menu = this.menu;
-      const phpHeader = new PopupBaseMenuItem2({ reactive: false });
-      const phpHeaderLabel = new St4.Label({
-        text: "PHP",
-        style: "font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.4); padding-top: 5px; padding-bottom: 2px;",
-        x_expand: true
-      });
-      phpHeaderLabel.clutter_text.ellipsize = 0;
-      phpHeader.add_child(phpHeaderLabel);
-      if (params.onRefresh) {
-        const refreshBtn = new St4.Button({
-          label: "\u21BA",
-          reactive: true,
-          style: "font-size: 14px; color: rgba(255,255,255,0.5); padding: 0 4px;"
-        });
-        refreshBtn.connect("clicked", () => params.onRefresh());
-        phpHeader.add_child(refreshBtn);
-      }
-      menu.addMenuItem(phpHeader);
+      menu.addMenuItem(createSectionHeader("PHP", { onRefresh: params.onRefresh }));
       this._phpSection = new PopupMenuSection();
       menu.addMenuItem(this._phpSection);
       menu.addMenuItem(new PopupSeparatorMenuItem2());
-      menu.addMenuItem(this._createSectionHeader("Servers"));
+      menu.addMenuItem(createSectionHeader("Servers"));
       const server1 = new ServerMenuItem({
         name: "my-super-project",
         port: "8000",
@@ -301,19 +316,9 @@ var Indicator = GObject5.registerClass(
       }
       menu.addMenuItem(this._favoriteServersGroup);
       menu.addMenuItem(new PopupSeparatorMenuItem2());
-      menu.addMenuItem(this._createSectionHeader("Proxy"));
+      menu.addMenuItem(createSectionHeader("Proxy"));
       this._proxyItem = new ProxyMenuItem();
       menu.addMenuItem(this._proxyItem);
-    }
-    _createSectionHeader(text) {
-      const header = new PopupBaseMenuItem2({ reactive: false });
-      const label = new St4.Label({
-        text: text.toUpperCase(),
-        style: "font-size: 11px; font-weight: bold; color: rgba(255, 255, 255, 0.4); padding-top: 5px; padding-bottom: 2px;"
-      });
-      label.clutter_text.ellipsize = 0;
-      header.add_child(label);
-      return header;
     }
     // ---- Public update API ----
     /**
