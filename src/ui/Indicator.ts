@@ -5,8 +5,8 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
 import { PhpVersionItem, PhpVersionItemType } from './components/PhpVersionItem.js';
-import { ServerMenuItem } from './components/ServerMenuItem.js';
-import { ServerRowItem } from './components/ServerRowItem.js';
+import { ServerMenuItem, ServerMenuItemType } from './components/ServerMenuItem.js';
+import { ServerRowItem, ServerRowItemType } from './components/ServerRowItem.js';
 import { FavoriteServersGroup, FavoriteServersGroupType } from './components/FavoriteServersGroup.js';
 import { ProxyMenuItem, ProxyMenuItemType } from './components/ProxyMenuItem.js';
 import { createSectionHeader } from './components/SectionHeader.js';
@@ -36,6 +36,7 @@ export const Indicator = GObject.registerClass(
         declare _onStartServer: (directory: string) => void;
         declare _onStopServer: (directory: string) => void;
         declare _onOpenBrowser: (directory: string) => void;
+        declare _serverItemMap: Map<string, ServerMenuItemType | ServerRowItemType>;
 
         _init(params: IndicatorParams) {
             super._init(0.0, 'Symfony Menubar', false);
@@ -45,6 +46,7 @@ export const Indicator = GObject.registerClass(
             this._onStartServer = params.onStartServer;
             this._onStopServer = params.onStopServer;
             this._onOpenBrowser = params.onOpenBrowser;
+            this._serverItemMap = new Map();
 
             const topLabel = new St.Label({
                 text: 'sf',
@@ -61,7 +63,7 @@ export const Indicator = GObject.registerClass(
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Servers section ----
-            menu.addMenuItem(createSectionHeader('Servers'));
+            menu.addMenuItem(createSectionHeader('Servers', { onRefresh: params.onRefresh }));
             this._serverSection = new PopupMenuSection();
             menu.addMenuItem(this._serverSection);
 
@@ -97,10 +99,12 @@ export const Indicator = GObject.registerClass(
          * Fully rebuilds the server sections from the given list.
          * Favorite servers (by directory) are shown directly; others go into the
          * collapsible "Other servers" group.
+         * Also resets the server item registry used for targeted optimistic updates.
          */
         updateServerStatus(servers: SymfonyServer[]): void {
             this._serverSection.removeAll();
             this._otherServersGroup.clear();
+            this._serverItemMap.clear();
 
             for (const server of servers) {
                 const isFav = this._favoritesRepository.isFavorite(server.directory);
@@ -124,8 +128,12 @@ export const Indicator = GObject.registerClass(
                         isRunning: server.isRunning,
                         isFavorite: true,
                         onToggleFavorite,
+                        onStart: this._onStartServer,
+                        onStop: this._onStopServer,
+                        onOpenBrowser: this._onOpenBrowser,
                     });
                     this._serverSection.addMenuItem(item);
+                    this._serverItemMap.set(server.directory, item);
                 } else {
                     const item = new ServerRowItem({
                         directory: server.directory,
@@ -139,8 +147,20 @@ export const Indicator = GObject.registerClass(
                         onToggleFavorite,
                     });
                     this._otherServersGroup.addServer(server.directory, item);
+                    this._serverItemMap.set(server.directory, item);
                 }
             }
+        }
+
+        /**
+         * Updates the UI of a single server item in place (optimistic or confirmed update).
+         * Safe no-op if the item is not in the registry (e.g., full rebuild happened first).
+         */
+        updateServerItem(directory: string, state: { isRunning: boolean; port: string }): void {
+            const item = this._serverItemMap.get(directory);
+            if (!item) return;
+            item.updateStatus(state.isRunning);
+            item.updatePort(state.port);
         }
 
         /**

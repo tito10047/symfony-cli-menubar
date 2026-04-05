@@ -94,6 +94,9 @@ var ServerMenuItem = GObject2.registerClass(
       this._isFavorite = params.isFavorite;
       this._directory = params.directory;
       this._onToggleFavorite = params.onToggleFavorite;
+      this._onStart = params.onStart;
+      this._onStop = params.onStop;
+      this._onOpenBrowser = params.onOpenBrowser;
       this._portLabel = null;
       this._dot = new St2.Label({
         text: "\u25CF  ",
@@ -143,10 +146,16 @@ var ServerMenuItem = GObject2.registerClass(
     _rebuildActions() {
       this.menu.removeAll();
       if (this._isRunning) {
-        this.menu.addMenuItem(new PopupMenuItem("\u23F9\uFE0F Stop server"));
-        this.menu.addMenuItem(new PopupMenuItem("\u{1F310} Open in browser"));
+        const stopItem = new PopupMenuItem("\u23F9\uFE0F Stop server");
+        stopItem.connect("activate", () => this._onStop?.(this._directory));
+        this.menu.addMenuItem(stopItem);
+        const browserItem = new PopupMenuItem("\u{1F310} Open in browser");
+        browserItem.connect("activate", () => this._onOpenBrowser?.(this._directory));
+        this.menu.addMenuItem(browserItem);
       } else {
-        this.menu.addMenuItem(new PopupMenuItem("\u25B6\uFE0F Start server"));
+        const startItem = new PopupMenuItem("\u25B6\uFE0F Start server");
+        startItem.connect("activate", () => this._onStart?.(this._directory));
+        this.menu.addMenuItem(startItem);
       }
       this.menu.addMenuItem(new PopupSeparatorMenuItem());
       this.menu.addMenuItem(new PopupMenuItem("\u{1F4CB} Copy URL"));
@@ -391,6 +400,7 @@ var Indicator = GObject6.registerClass(
       this._onStartServer = params.onStartServer;
       this._onStopServer = params.onStopServer;
       this._onOpenBrowser = params.onOpenBrowser;
+      this._serverItemMap = /* @__PURE__ */ new Map();
       const topLabel = new St6.Label({
         text: "sf",
         y_align: Clutter5.ActorAlign.CENTER
@@ -401,7 +411,7 @@ var Indicator = GObject6.registerClass(
       this._phpSection = new PopupMenuSection();
       menu.addMenuItem(this._phpSection);
       menu.addMenuItem(new PopupSeparatorMenuItem2());
-      menu.addMenuItem(createSectionHeader("Servers"));
+      menu.addMenuItem(createSectionHeader("Servers", { onRefresh: params.onRefresh }));
       this._serverSection = new PopupMenuSection();
       menu.addMenuItem(this._serverSection);
       this._otherServersGroup = new FavoriteServersGroup();
@@ -431,10 +441,12 @@ var Indicator = GObject6.registerClass(
      * Fully rebuilds the server sections from the given list.
      * Favorite servers (by directory) are shown directly; others go into the
      * collapsible "Other servers" group.
+     * Also resets the server item registry used for targeted optimistic updates.
      */
     updateServerStatus(servers) {
       this._serverSection.removeAll();
       this._otherServersGroup.clear();
+      this._serverItemMap.clear();
       for (const server of servers) {
         const isFav = this._favoritesRepository.isFavorite(server.directory);
         const name = server.directory.split("/").pop() ?? server.directory;
@@ -454,9 +466,13 @@ var Indicator = GObject6.registerClass(
             port,
             isRunning: server.isRunning,
             isFavorite: true,
-            onToggleFavorite
+            onToggleFavorite,
+            onStart: this._onStartServer,
+            onStop: this._onStopServer,
+            onOpenBrowser: this._onOpenBrowser
           });
           this._serverSection.addMenuItem(item);
+          this._serverItemMap.set(server.directory, item);
         } else {
           const item = new ServerRowItem({
             directory: server.directory,
@@ -470,8 +486,19 @@ var Indicator = GObject6.registerClass(
             onToggleFavorite
           });
           this._otherServersGroup.addServer(server.directory, item);
+          this._serverItemMap.set(server.directory, item);
         }
       }
+    }
+    /**
+     * Updates the UI of a single server item in place (optimistic or confirmed update).
+     * Safe no-op if the item is not in the registry (e.g., full rebuild happened first).
+     */
+    updateServerItem(directory, state) {
+      const item = this._serverItemMap.get(directory);
+      if (!item) return;
+      item.updateStatus(state.isRunning);
+      item.updatePort(state.port);
     }
     /**
      * Updates proxy section status dot and label.
@@ -1151,32 +1178,26 @@ var FavoritesRepository = class {
 };
 
 // src/extension.ts
-var REFRESH_INTERVAL_SECONDS = 30;
 var SymfonyMenubarExtension = class extends Extension {
   _indicator = null;
   _manager = null;
   _logger = null;
-  _refreshTimer = null;
   _lastServers = null;
+  _pollMap = /* @__PURE__ */ new Map();
+  _settings = null;
   enable() {
     this._logger = new ConsoleLogger();
     this._logger.info("Enabling extension");
     const runner = new GjsProcessRunner(this._logger);
     this._manager = new SymfonyCliManager(runner);
     this._manager.setLogger(this._logger);
-    const settings = this.getSettings();
-    const favoritesRepository = new FavoritesRepository(settings);
+    this._settings = this.getSettings();
+    const favoritesRepository = new FavoritesRepository(this._settings);
     this._indicator = new Indicator({
       onRefresh: () => this._refresh(),
       favoritesRepository,
-      onStartServer: async (dir) => {
-        await this._manager?.runCommand("server:start", [dir]);
-        this._refresh();
-      },
-      onStopServer: async (dir) => {
-        await this._manager?.runCommand("server:stop", [dir]);
-        this._refresh();
-      },
+      onStartServer: (dir) => this._handleStartServer(dir),
+      onStopServer: (dir) => this._handleStopServer(dir),
       onOpenBrowser: (dir) => {
         const server = this._lastServers?.find((s) => s.directory === dir);
         if (server?.url) Gio2.AppInfo.launch_default_for_uri(server.url, null);
@@ -1184,29 +1205,91 @@ var SymfonyMenubarExtension = class extends Extension {
     });
     Main.panel.addToStatusArea(this.uuid, this._indicator);
     this._refresh();
-    this._refreshTimer = GLib.timeout_add_seconds(
-      GLib.PRIORITY_DEFAULT,
-      REFRESH_INTERVAL_SECONDS,
-      () => {
-        this._refresh();
-        return GLib.SOURCE_CONTINUE;
-      }
-    );
   }
   disable() {
     this._logger?.info("Disabling extension");
-    if (this._refreshTimer !== null) {
-      GLib.Source.remove(this._refreshTimer);
-      this._refreshTimer = null;
+    for (const dir of [...this._pollMap.keys()]) {
+      this._cancelPoll(dir);
     }
+    this._pollMap.clear();
     this._indicator?.destroy();
     this._indicator = null;
     this._manager = null;
     this._logger = null;
     this._lastServers = null;
+    this._settings = null;
+  }
+  _handleStartServer(dir) {
+    const original = this._lastServers?.find((s) => s.directory === dir);
+    if (!original) return;
+    this._indicator?.updateServerItem(dir, { isRunning: true, port: "" });
+    this._cancelPoll(dir);
+    this._manager?.runCommand("server:start", [dir]).catch((err) => this._logger?.error(`server:start failed for ${dir}:`, err));
+    this._startPolling(dir, "running", original);
+  }
+  _handleStopServer(dir) {
+    const original = this._lastServers?.find((s) => s.directory === dir);
+    if (!original) return;
+    this._indicator?.updateServerItem(dir, { isRunning: false, port: "" });
+    this._cancelPoll(dir);
+    this._manager?.runCommand("server:stop", [dir]).catch((err) => this._logger?.error(`server:stop failed for ${dir}:`, err));
+    this._startPolling(dir, "stopped", original);
+  }
+  _startPolling(dir, desiredState, original) {
+    const pollInterval = this._settings?.get_int("polling-interval") ?? 5;
+    const timeout = this._settings?.get_int("status-check-timeout") ?? 20;
+    const tickTimerId = GLib.timeout_add_seconds(
+      GLib.PRIORITY_DEFAULT,
+      pollInterval,
+      () => {
+        this._doPollTick(dir, desiredState);
+        return GLib.SOURCE_CONTINUE;
+      }
+    );
+    const timeoutTimerId = GLib.timeout_add_seconds(
+      GLib.PRIORITY_DEFAULT,
+      timeout,
+      () => {
+        this._logger?.warn(`Poll timeout for ${dir}: reverting optimistic state`);
+        this._cancelPoll(dir);
+        this._indicator?.updateServerItem(dir, {
+          isRunning: original.isRunning,
+          port: original.isRunning ? String(original.port) : ""
+        });
+        return GLib.SOURCE_REMOVE;
+      }
+    );
+    this._pollMap.set(dir, { desiredState, originalServer: original, tickTimerId, timeoutTimerId });
+  }
+  _doPollTick(dir, desiredState) {
+    if (!this._manager) return;
+    this._manager.runCommand("server:list").then((servers) => {
+      this._lastServers = servers;
+      const server = servers.find((s) => s.directory === dir);
+      if (!server) return;
+      const achieved = desiredState === "running" ? server.isRunning : !server.isRunning;
+      if (achieved) {
+        this._logger?.info(`Poll confirmed '${desiredState}' for ${dir}`);
+        this._cancelPoll(dir);
+        this._indicator?.updateServerItem(dir, {
+          isRunning: server.isRunning,
+          port: server.isRunning ? String(server.port) : ""
+        });
+      }
+    }).catch((err) => this._logger?.error("Poll tick server:list failed:", err));
+  }
+  _cancelPoll(dir) {
+    const state = this._pollMap.get(dir);
+    if (!state) return;
+    GLib.Source.remove(state.tickTimerId);
+    GLib.Source.remove(state.timeoutTimerId);
+    this._pollMap.delete(dir);
   }
   _refresh() {
     if (!this._manager || !this._indicator) return;
+    for (const dir of [...this._pollMap.keys()]) {
+      this._cancelPoll(dir);
+    }
     const manager = this._manager;
     const indicator = this._indicator;
     manager.runCommand("local:php:list").then(async (versions) => {

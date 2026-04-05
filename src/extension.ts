@@ -13,14 +13,23 @@ import { PhpInfo } from './core/dto/PhpInfo.js';
 import { SymfonyServer } from './core/commands/ServerListCommand.js';
 import { FavoritesRepository } from './core/services/FavoritesRepository.js';
 
-const REFRESH_INTERVAL_SECONDS = 30;
+type DesiredState = 'running' | 'stopped';
+
+interface PollState {
+    desiredState: DesiredState;
+    /** Server snapshot captured before the optimistic flip — used to revert on timeout. */
+    originalServer: SymfonyServer;
+    tickTimerId: number;
+    timeoutTimerId: number;
+}
 
 export default class SymfonyMenubarExtension extends Extension {
     private _indicator: IndicatorType | null = null;
     private _manager: SymfonyCliManager | null = null;
     private _logger: LoggerInterface | null = null;
-    private _refreshTimer: number | null = null;
     private _lastServers: SymfonyServer[] | null = null;
+    private _pollMap: Map<string, PollState> = new Map();
+    private _settings: ReturnType<Extension['getSettings']> | null = null;
 
     enable(): void {
         this._logger = new ConsoleLogger();
@@ -30,20 +39,14 @@ export default class SymfonyMenubarExtension extends Extension {
         this._manager = new SymfonyCliManager(runner);
         this._manager.setLogger(this._logger);
 
-        const settings = this.getSettings();
-        const favoritesRepository = new FavoritesRepository(settings);
+        this._settings = this.getSettings();
+        const favoritesRepository = new FavoritesRepository(this._settings);
 
         this._indicator = new Indicator({
             onRefresh: () => this._refresh(),
             favoritesRepository,
-            onStartServer: async (dir) => {
-                await this._manager?.runCommand<boolean>('server:start', [dir]);
-                this._refresh();
-            },
-            onStopServer: async (dir) => {
-                await this._manager?.runCommand<boolean>('server:stop', [dir]);
-                this._refresh();
-            },
+            onStartServer: (dir) => this._handleStartServer(dir),
+            onStopServer: (dir) => this._handleStopServer(dir),
             onOpenBrowser: (dir) => {
                 const server = this._lastServers?.find(s => s.directory === dir);
                 if (server?.url) Gio.AppInfo.launch_default_for_uri(server.url, null);
@@ -52,32 +55,125 @@ export default class SymfonyMenubarExtension extends Extension {
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
         this._refresh();
-
-        this._refreshTimer = GLib.timeout_add_seconds(
-            GLib.PRIORITY_DEFAULT,
-            REFRESH_INTERVAL_SECONDS,
-            () => {
-                this._refresh();
-                return GLib.SOURCE_CONTINUE;
-            }
-        );
     }
 
     disable(): void {
         this._logger?.info('Disabling extension');
-        if (this._refreshTimer !== null) {
-            GLib.Source.remove(this._refreshTimer);
-            this._refreshTimer = null;
+
+        for (const dir of [...this._pollMap.keys()]) {
+            this._cancelPoll(dir);
         }
+        this._pollMap.clear();
+
         this._indicator?.destroy();
         this._indicator = null;
         this._manager = null;
         this._logger = null;
         this._lastServers = null;
+        this._settings = null;
+    }
+
+    private _handleStartServer(dir: string): void {
+        const original = this._lastServers?.find(s => s.directory === dir);
+        if (!original) {
+            this._logger?.error(`Server start requested for unknown directory: ${dir}`);
+            return;
+        }
+
+        this._indicator?.updateServerItem(dir, { isRunning: true, port: '' });
+        this._cancelPoll(dir);
+
+        this._manager?.runCommand<boolean>('server:start', [dir])
+            .catch(err => this._logger?.error(`server:start failed for ${dir}:`, err));
+
+        this._startPolling(dir, 'running', original);
+
+
+    }
+
+    private _handleStopServer(dir: string): void {
+        const original = this._lastServers?.find(s => s.directory === dir);
+        if (!original) {
+            this._logger?.error(`Server start requested for unknown directory: ${dir}`);
+            return;
+        }
+
+        this._indicator?.updateServerItem(dir, { isRunning: false, port: '' });
+        this._cancelPoll(dir);
+
+        this._manager?.runCommand<boolean>('server:stop', [dir])
+            .catch(err => this._logger?.error(`server:stop failed for ${dir}:`, err));
+
+        this._startPolling(dir, 'stopped', original);
+    }
+
+    private _startPolling(dir: string, desiredState: DesiredState, original: SymfonyServer): void {
+        const pollInterval = this._settings?.get_int('polling-interval') ?? 5;
+        const timeout = this._settings?.get_int('status-check-timeout') ?? 20;
+
+        const tickTimerId = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT,
+            pollInterval,
+            () => {
+                this._doPollTick(dir, desiredState);
+                return GLib.SOURCE_CONTINUE;
+            }
+        );
+
+        const timeoutTimerId = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT,
+            timeout,
+            () => {
+                this._logger?.warn(`Poll timeout for ${dir}: reverting optimistic state`);
+                this._cancelPoll(dir);
+                this._indicator?.updateServerItem(dir, {
+                    isRunning: original.isRunning,
+                    port: original.isRunning ? String(original.port) : '',
+                });
+                return GLib.SOURCE_REMOVE;
+            }
+        );
+
+        this._pollMap.set(dir, { desiredState, originalServer: original, tickTimerId, timeoutTimerId });
+    }
+
+    private _doPollTick(dir: string, desiredState: DesiredState): void {
+        if (!this._manager) return;
+
+        this._manager.runCommand<SymfonyServer[]>('server:list')
+            .then(servers => {
+                this._lastServers = servers;
+                const server = servers.find(s => s.directory === dir);
+                if (!server) return;
+
+                const achieved = desiredState === 'running' ? server.isRunning : !server.isRunning;
+                if (achieved) {
+                    this._logger?.info(`Poll confirmed '${desiredState}' for ${dir}`);
+                    this._cancelPoll(dir);
+                    this._indicator?.updateServerItem(dir, {
+                        isRunning: server.isRunning,
+                        port: server.isRunning ? String(server.port) : '',
+                    });
+                }
+            })
+            .catch(err => this._logger?.error('Poll tick server:list failed:', err));
+    }
+
+    private _cancelPoll(dir: string): void {
+        const state = this._pollMap.get(dir);
+        if (!state) return;
+        GLib.Source.remove(state.tickTimerId);
+        GLib.Source.remove(state.timeoutTimerId);
+        this._pollMap.delete(dir);
     }
 
     private _refresh(): void {
         if (!this._manager || !this._indicator) return;
+
+        // Cancel all active polls — fresh real data supersedes any optimistic state.
+        for (const dir of [...this._pollMap.keys()]) {
+            this._cancelPoll(dir);
+        }
 
         const manager = this._manager;
         const indicator = this._indicator;

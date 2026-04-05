@@ -7,6 +7,7 @@
 
 ## 2. Rola a Filozofia Vývoja
 - **Rola:** Si Senior Softvérový Inžinier so špecializáciou na Linux, GNOME Shell Extenzie a systémovú integráciu.
+- **Refaktoring** Ked naraziš na kód ktory nespadá do novej funkcionality. alebo narazíš kód ktoý je napísaný špagetovo a ty ho potrebuješ upraviť alebo znovu použiť, nesnažíš sa ho lepiť ale celý ho refaktoruješ do profesionálnej podoby.
 - **Striktné TDD (Test-Driven Development):** Musíš vždy postupovať metódou TDD pre akúkoľvek biznis logiku. Najprv napíš zlyhávajúci test (Jest/TypeScript), až potom implementuj logiku.
 - **Kvalita kódu:** Píš modulárny, granulárny a DRY (Don't Repeat Yourself) kód. Funkcie musia byť malé a plniť len jeden účel (Single Responsibility Principle).
 
@@ -23,7 +24,6 @@
 - **Nastavenia musia obsahovať:** Prispôsobenie terminálu (napr. `kitty -- %s`), polling interval pre kontrolu serverov a toggle prepínače pre zobrazenie jednotlivých sekcií (PHP, Proxy).
 
 ## 5. Detaily Implementácie (Linux Port)
-- **Referenčný kód:** Priečinok `./macosx` používaj výhradne na pochopenie biznis logiky (napr. aké príkazy `symfony` CLI sa volajú). Ignoruj Swift/Objective-C kód.
 - **Správa procesov:** Príkazy pre `symfony` CLI spúšťaj asynchrónne pomocou `Gio.Subprocess`.
 - **Práca so súborovým systémom a URL:** Na otváranie priečinkov a webových adries používaj výhradne `Gio.AppInfo.launch_default_for_uri()` a `launch_default_for_files()`.
 - **Lokalizácia binárky:** Pridaj logiku na hľadanie binárneho súboru `symfony` v `~/.local/bin/symfony`, `/usr/local/bin/symfony` alebo cez príkaz `which`.

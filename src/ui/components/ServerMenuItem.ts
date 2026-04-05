@@ -14,6 +14,9 @@ export interface ServerMenuItemParams {
     isRunning: boolean;
     isFavorite: boolean;
     onToggleFavorite?: (directory: string) => void;
+    onStart?: (directory: string) => void;
+    onStop?: (directory: string) => void;
+    onOpenBrowser?: (directory: string) => void;
 }
 
 const ServerMenuItem = GObject.registerClass(
@@ -24,6 +27,9 @@ const ServerMenuItem = GObject.registerClass(
         declare _isFavorite: boolean;
         declare _directory: string;
         declare _onToggleFavorite: ((directory: string) => void) | undefined;
+        declare _onStart: ((directory: string) => void) | undefined;
+        declare _onStop: ((directory: string) => void) | undefined;
+        declare _onOpenBrowser: ((directory: string) => void) | undefined;
 
         _init(params: ServerMenuItemParams) {
             super._init(params.name);
@@ -33,6 +39,9 @@ const ServerMenuItem = GObject.registerClass(
             this._isFavorite = params.isFavorite;
             this._directory = params.directory;
             this._onToggleFavorite = params.onToggleFavorite;
+            this._onStart = params.onStart;
+            this._onStop = params.onStop;
+            this._onOpenBrowser = params.onOpenBrowser;
             this._portLabel = null;
 
             // Status dot — inserted directly before the name label.
@@ -95,10 +104,17 @@ const ServerMenuItem = GObject.registerClass(
             this.menu.removeAll();
 
             if (this._isRunning) {
-                this.menu.addMenuItem(new PopupMenuItem('⏹️ Stop server'));
-                this.menu.addMenuItem(new PopupMenuItem('🌐 Open in browser'));
+                const stopItem = new PopupMenuItem('⏹️ Stop server');
+                stopItem.connect('activate', () => this._onStop?.(this._directory));
+                this.menu.addMenuItem(stopItem);
+
+                const browserItem = new PopupMenuItem('🌐 Open in browser');
+                browserItem.connect('activate', () => this._onOpenBrowser?.(this._directory));
+                this.menu.addMenuItem(browserItem);
             } else {
-                this.menu.addMenuItem(new PopupMenuItem('▶️ Start server'));
+                const startItem = new PopupMenuItem('▶️ Start server');
+                startItem.connect('activate', () => this._onStart?.(this._directory));
+                this.menu.addMenuItem(startItem);
             }
 
             this.menu.addMenuItem(new PopupSeparatorMenuItem());
