@@ -62,7 +62,7 @@ const PhpVersionItem = GObject.registerClass(
         }
 
         updateStatus(isActive: boolean): void {
-            this._dot.set_style(`color: ${isActive ? '#4ade80' : '#888888'};`);
+            this._dot.set_style(`color: ${isActive ? '#4ade80' : '#888888'}; margin-right: 6px;`);
         }
 
         /**

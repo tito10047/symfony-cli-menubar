@@ -55,6 +55,7 @@ export const Indicator = GObject.registerClass(
             this.add_child(topLabel);
 
             const menu = this.menu;
+            menu.actor.add_style_class_name('symfony-menubar-menu');
 
             // ---- PHP section ----
             menu.addMenuItem(createSectionHeader('PHP', { onRefresh: params.onRefresh }));
