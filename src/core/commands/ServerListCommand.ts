@@ -6,6 +6,7 @@ export interface SymfonyServer {
     directory: string;
     port: number;
     url: string;
+    domain?: string;
     isRunning: boolean;
     pid?: number;
     phpVersion?: string;
@@ -64,6 +65,7 @@ export class ServerListCommand implements SymfonyCommandInterface<SymfonyServer[
 
                 const directory = columns[0];
                 const portStr = columns[1];
+                const domain = columns.length >= 3 && columns[2] ? columns[2] : undefined;
 
                 let port = 8000;
                 let isRunning = false;
@@ -79,12 +81,15 @@ export class ServerListCommand implements SymfonyCommandInterface<SymfonyServer[
                 }
 
                 // URL
-                const url = isRunning ? `https://127.0.0.1:${port}` : '';
+                const url = isRunning
+                    ? (domain ? `https://${domain}` : `https://127.0.0.1:${port}`)
+                    : '';
 
                 servers.push({
                     directory,
                     port,
                     url,
+                    domain,
                     isRunning
                 });
             }
