@@ -24,6 +24,7 @@ interface IndicatorParams {
     onStartServer: (directory: string) => void;
     onStopServer: (directory: string) => void;
     onOpenBrowser: (directory: string) => void;
+    onViewLogs: (directory: string) => void;
     onStartProxy: () => void;
     onStopProxy: () => void;
     onRestartProxy: () => void;
@@ -42,6 +43,7 @@ export const Indicator = GObject.registerClass(
         declare _onStartServer: (directory: string) => void;
         declare _onStopServer: (directory: string) => void;
         declare _onOpenBrowser: (directory: string) => void;
+        declare _onViewLogs: (directory: string) => void;
         declare _serverItemMap: Map<string, ServerItemInterface>;
 
         _init(params: IndicatorParams) {
@@ -52,6 +54,7 @@ export const Indicator = GObject.registerClass(
             this._onStartServer = params.onStartServer;
             this._onStopServer = params.onStopServer;
             this._onOpenBrowser = params.onOpenBrowser;
+            this._onViewLogs = params.onViewLogs;
             this._serverItemMap = new Map();
 
             const topLabel = new St.Label({
@@ -140,6 +143,7 @@ export const Indicator = GObject.registerClass(
                         onStart: this._onStartServer,
                         onStop: this._onStopServer,
                         onOpenBrowser: this._onOpenBrowser,
+                        onViewLogs: this._onViewLogs,
                     });
                     this._serverSection.addMenuItem(item);
                     this._serverItemMap.set(server.directory, item);
@@ -154,6 +158,7 @@ export const Indicator = GObject.registerClass(
                         onStop: this._onStopServer,
                         onOpenBrowser: this._onOpenBrowser,
                         onToggleFavorite: (dir) => this._toggleFavorite(dir),
+                        onViewLogs: this._onViewLogs,
                     });
                     this._otherServersGroup.addServer(server.directory, item);
                     this._serverItemMap.set(server.directory, item);

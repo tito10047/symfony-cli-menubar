@@ -63,6 +63,7 @@ export default class SymfonyMenubarExtension extends Extension {
                 const server = this._lastServers?.find(s => s.directory === dir);
                 if (server?.url) Gio.AppInfo.launch_default_for_uri(server.url, null);
             },
+            onViewLogs: (dir) => this._handleViewLogs(dir),
             onStartProxy: () => this._handleStartProxy(),
             onStopProxy: () => this._handleStopProxy(),
             onRestartProxy: () => this._handleRestartProxy(),
@@ -187,6 +188,28 @@ export default class SymfonyMenubarExtension extends Extension {
         this._m.runCommand<string>('proxy:url')
             .then(url => { if (url) Gio.AppInfo.launch_default_for_uri(url, null); })
             .catch(err => this._logger?.error('proxy:url failed:', err));
+    }
+
+    private _handleViewLogs(dir: string): void {
+        const args = ['symfony', 'server:log', `--dir=${dir}`];
+        const terminals: string[][] = [
+            ['ptyxis', '--', ...args],
+            ['gnome-terminal', '--', ...args],
+            ['kgx', '--', ...args],
+            ['konsole', '-e', ...args],
+            ['xterm', '-e', ...args],
+        ];
+
+        for (const termArgs of terminals) {
+            try {
+                Gio.Subprocess.new(termArgs, Gio.SubprocessFlags.NONE);
+                this._logger?.info(`Opened log terminal for ${dir}`);
+                return;
+            } catch (_e) {
+                this._logger?.error(`Failed to open terminal with args: ${termArgs.join(' ')}`,_e);
+            }
+        }
+        this._logger?.error(`Could not open any terminal for logs: ${dir}`);
     }
 
     private _refreshProxy(): void {

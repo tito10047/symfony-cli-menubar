@@ -14,6 +14,7 @@ export interface ServerRowItemParams {
     onStop: (directory: string) => void;
     onOpenBrowser: (directory: string) => void;
     onToggleFavorite: (directory: string) => void;
+    onViewLogs: (directory: string) => void;
 }
 
 const ServerRowItem = GObject.registerClass(
@@ -22,6 +23,7 @@ const ServerRowItem = GObject.registerClass(
         declare _portLabel: InstanceType<typeof St.Label>;
         declare _startStopBtn: InstanceType<typeof St.Button>;
         declare _browserBtn: InstanceType<typeof St.Button>;
+        declare _logsBtn: InstanceType<typeof St.Button>;
         declare _favoriteBtn: InstanceType<typeof St.Button>;
         declare _isRunning: boolean;
         declare _isFavorite: boolean;
@@ -30,6 +32,7 @@ const ServerRowItem = GObject.registerClass(
         declare _onStop: (directory: string) => void;
         declare _onOpenBrowser: (directory: string) => void;
         declare _onToggleFavorite: (directory: string) => void;
+        declare _onViewLogs: (directory: string) => void;
 
         _init(params: ServerRowItemParams) {
             super._init({ reactive: false });
@@ -41,6 +44,7 @@ const ServerRowItem = GObject.registerClass(
             this._onStop = params.onStop;
             this._onOpenBrowser = params.onOpenBrowser;
             this._onToggleFavorite = params.onToggleFavorite;
+            this._onViewLogs = params.onViewLogs;
 
             // Status dot
             this._dot = new St.Icon({
@@ -71,6 +75,7 @@ const ServerRowItem = GObject.registerClass(
             );
             this._browserBtn = this._makeIconButton('web-browser-symbolic');
             this._browserBtn.visible = params.isRunning;
+            this._logsBtn = this._makeIconButton('utilities-terminal-symbolic');
             this._favoriteBtn = this._makeIconButton(
                 params.isFavorite ? 'starred-symbolic' : 'non-starred-symbolic'
             );
@@ -80,6 +85,7 @@ const ServerRowItem = GObject.registerClass(
             });
             buttonBox.add_child(this._startStopBtn);
             buttonBox.add_child(this._browserBtn);
+            buttonBox.add_child(this._logsBtn);
             buttonBox.add_child(this._favoriteBtn);
 
             this.add_child(this._dot);
@@ -142,6 +148,10 @@ const ServerRowItem = GObject.registerClass(
 
             this._browserBtn.connect('clicked', () => {
                 this._onOpenBrowser(this._directory);
+            });
+
+            this._logsBtn.connect('clicked', () => {
+                this._onViewLogs(this._directory);
             });
 
             this._favoriteBtn.connect('clicked', () => {

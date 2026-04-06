@@ -16,6 +16,7 @@ export interface ServerMenuItemParams {
     onStart?: (directory: string) => void;
     onStop?: (directory: string) => void;
     onOpenBrowser?: (directory: string) => void;
+    onViewLogs?: (directory: string) => void;
 }
 
 const ServerMenuItem = GObject.registerClass(
@@ -29,6 +30,7 @@ const ServerMenuItem = GObject.registerClass(
         declare _onStart: ((directory: string) => void) | undefined;
         declare _onStop: ((directory: string) => void) | undefined;
         declare _onOpenBrowser: ((directory: string) => void) | undefined;
+        declare _onViewLogs: ((directory: string) => void) | undefined;
 
         _init(params: ServerMenuItemParams) {
             super._init(params.name);
@@ -41,6 +43,7 @@ const ServerMenuItem = GObject.registerClass(
             this._onStart = params.onStart;
             this._onStop = params.onStop;
             this._onOpenBrowser = params.onOpenBrowser;
+            this._onViewLogs = params.onViewLogs;
             this._portLabel = null;
 
             // Status dot — inserted directly before the name label.
@@ -123,7 +126,9 @@ const ServerMenuItem = GObject.registerClass(
 
             this.menu.addMenuItem(new PopupSeparatorMenuItem());
             this.menu.addMenuItem(new PopupImageMenuItem('Copy URL', 'edit-copy-symbolic'));
-            this.menu.addMenuItem(new PopupImageMenuItem('View logs', 'emblem-documents-symbolic'));
+            const logsItem = new PopupImageMenuItem('View logs', 'utilities-terminal-symbolic');
+            (logsItem as any).activate = () => this._onViewLogs?.(this._directory);
+            this.menu.addMenuItem(logsItem);
 
             this.menu.addMenuItem(new PopupSeparatorMenuItem());
             const favIcon = this._isFavorite ? 'starred-symbolic' : 'non-starred-symbolic';
