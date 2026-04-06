@@ -39,8 +39,14 @@ export class ProxyStatusCommand implements SymfonyCommandInterface<ProxyStatus> 
 
             const lines = output.split('\n');
             let isRunning = false;
-            
-            // Check first few lines for status
+
+            // Explicit "Not Running" check — only in header section (before the server table)
+            const headerLines = lines.slice(0, 5).join('\n').toLowerCase();
+            if (headerLines.includes('not running')) {
+                return { isRunning: false, proxies: [] };
+            }
+
+            // Check first few lines for running indicators
             for (let i = 0; i < Math.min(lines.length, 10); i++) {
                 const line = lines[i].toLowerCase();
                 if (line.includes('listening') || line.includes('proxy is running')) {

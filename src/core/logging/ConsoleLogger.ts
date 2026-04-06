@@ -1,21 +1,31 @@
 import { LoggerInterface } from '../interfaces/LoggerInterface';
 
+interface GnomeLogger {
+    log(message: string): void;
+    warn(message: string): void;
+    error(message: string): void;
+}
+
 export class ConsoleLogger implements LoggerInterface {
-    private readonly prefix = '[SymfonyMenubar]';
+    private readonly _gnomeLogger: GnomeLogger;
+
+    constructor(gnomeLogger: GnomeLogger) {
+        this._gnomeLogger = gnomeLogger;
+    }
 
     debug(message: string, ...args: any[]): void {
-        console.debug(`${this.prefix} ${message}`, ...args);
+        this._gnomeLogger.log(args.length ? `${message} ${args.map(a => JSON.stringify(a)).join(' ')}` : message);
     }
 
     info(message: string, ...args: any[]): void {
-        console.info(`${this.prefix} ${message}`, ...args);
+        this._gnomeLogger.log(args.length ? `${message} ${args.map(a => JSON.stringify(a)).join(' ')}` : message);
     }
 
     warn(message: string, ...args: any[]): void {
-        console.warn(`${this.prefix} ${message}`, ...args);
+        this._gnomeLogger.warn(args.length ? `${message} ${args.map(a => JSON.stringify(a)).join(' ')}` : message);
     }
 
     error(message: string, ...args: any[]): void {
-        console.error(`${this.prefix} ${message}`, ...args);
+        this._gnomeLogger.error(args.length ? `${message} ${args.map(a => JSON.stringify(a)).join(' ')}` : message);
     }
 }

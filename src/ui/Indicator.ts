@@ -23,6 +23,10 @@ interface IndicatorParams {
     onStartServer: (directory: string) => void;
     onStopServer: (directory: string) => void;
     onOpenBrowser: (directory: string) => void;
+    onStartProxy: () => void;
+    onStopProxy: () => void;
+    onRestartProxy: () => void;
+    onOpenProxyBrowser: () => void;
 }
 
 export const Indicator = GObject.registerClass(
@@ -73,8 +77,13 @@ export const Indicator = GObject.registerClass(
             menu.addMenuItem(new PopupSeparatorMenuItem());
 
             // ---- Proxy section ----
-            menu.addMenuItem(createSectionHeader('Proxy'));
-            this._proxyItem = new ProxyMenuItem();
+            menu.addMenuItem(createSectionHeader('Proxy', { onRefresh: params.onRefresh }));
+            this._proxyItem = new ProxyMenuItem({
+                onStart: params.onStartProxy,
+                onStop: params.onStopProxy,
+                onRestart: params.onRestartProxy,
+                onOpenBrowser: params.onOpenProxyBrowser,
+            });
             menu.addMenuItem(this._proxyItem);
         }
 
@@ -165,11 +174,10 @@ export const Indicator = GObject.registerClass(
         }
 
         /**
-         * Updates proxy section status dot and label.
-         * Port is not yet available in ProxyStatus; pass it explicitly when known.
+         * Updates proxy section status dot, label, and domain list.
          */
-        updateProxyStatus(status: ProxyStatus, port?: number): void {
-            this._proxyItem.updateStatus(status.isRunning, port);
+        updateProxyStatus(status: ProxyStatus): void {
+            this._proxyItem.updateStatus(status.isRunning, status.proxies);
         }
     }
 );

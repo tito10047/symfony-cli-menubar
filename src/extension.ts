@@ -12,6 +12,7 @@ import { PhpVersion } from './core/commands/PhpListCommand.js';
 import { PhpInfo } from './core/dto/PhpInfo.js';
 import { SymfonyServer } from './core/commands/ServerListCommand.js';
 import { FavoritesRepository } from './core/services/FavoritesRepository.js';
+import { ProxyStatus } from './core/commands/ProxyStatusCommand.js';
 
 type DesiredState = 'running' | 'stopped';
 
@@ -28,16 +29,19 @@ export default class SymfonyMenubarExtension extends Extension {
     private _manager: SymfonyCliManager | null = null;
     private _logger: LoggerInterface | null = null;
     private _lastServers: SymfonyServer[] | null = null;
+    private _lastProxyStatus: ProxyStatus | null = null;
     private _pollMap: Map<string, PollState> = new Map();
     private _settings: ReturnType<Extension['getSettings']> | null = null;
 
     enable(): void {
-        this._logger = new ConsoleLogger();
+
+        this._logger = new ConsoleLogger(this.getLogger());
         this._logger.info('Enabling extension');
 
         const runner = new GjsProcessRunner(this._logger);
         this._manager = new SymfonyCliManager(runner);
         this._manager.setLogger(this._logger);
+
 
         this._settings = this.getSettings();
         const favoritesRepository = new FavoritesRepository(this._settings);
@@ -51,6 +55,10 @@ export default class SymfonyMenubarExtension extends Extension {
                 const server = this._lastServers?.find(s => s.directory === dir);
                 if (server?.url) Gio.AppInfo.launch_default_for_uri(server.url, null);
             },
+            onStartProxy: () => this._handleStartProxy(),
+            onStopProxy: () => this._handleStopProxy(),
+            onRestartProxy: () => this._handleRestartProxy(),
+            onOpenProxyBrowser: () => this._handleOpenProxyBrowser(),
         });
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
@@ -70,6 +78,7 @@ export default class SymfonyMenubarExtension extends Extension {
         this._manager = null;
         this._logger = null;
         this._lastServers = null;
+        this._lastProxyStatus = null;
         this._settings = null;
     }
 
@@ -167,6 +176,41 @@ export default class SymfonyMenubarExtension extends Extension {
         this._pollMap.delete(dir);
     }
 
+    private _handleStartProxy(): void {
+        this._manager?.runCommand<boolean>('proxy:start')
+            .then(() => this._refreshProxy())
+            .catch(err => this._logger?.error('proxy:start failed:', err));
+    }
+
+    private _handleStopProxy(): void {
+        this._manager?.runCommand<boolean>('proxy:stop')
+            .then(() => this._refreshProxy())
+            .catch(err => this._logger?.error('proxy:stop failed:', err));
+    }
+
+    private _handleRestartProxy(): void {
+        this._manager?.runCommand<boolean>('proxy:stop')
+            .then(() => this._manager!.runCommand<boolean>('proxy:start'))
+            .then(() => this._refreshProxy())
+            .catch(err => this._logger?.error('proxy:restart failed:', err));
+    }
+
+    private _handleOpenProxyBrowser(): void {
+        this._manager?.runCommand<string>('proxy:url')
+            .then(url => { if (url) Gio.AppInfo.launch_default_for_uri(url, null); })
+            .catch(err => this._logger?.error('proxy:url failed:', err));
+    }
+
+    private _refreshProxy(): void {
+        if (!this._manager || !this._indicator) return;
+        this._manager.runCommand<ProxyStatus>('proxy:status')
+            .then(status => {
+                this._lastProxyStatus = status;
+                this._indicator?.updateProxyStatus(status);
+            })
+            .catch(err => this._logger?.error('Proxy refresh failed:', err));
+    }
+
     private _refresh(): void {
         if (!this._manager || !this._indicator) return;
 
@@ -203,5 +247,7 @@ export default class SymfonyMenubarExtension extends Extension {
             .catch(err => {
                 this._logger?.error('Server list refresh failed:', err);
             });
+
+        this._refreshProxy();
     }
 }
