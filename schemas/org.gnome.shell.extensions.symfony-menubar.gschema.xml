@@ -16,6 +16,11 @@
       <summary>Status check timeout</summary>
       <description>Maximum seconds to poll for a server state change before reverting the optimistic UI update.</description>
     </key>
+    <key name="proxy-startup-timeout" type="i">
+      <default>60</default>
+      <summary>Proxy startup timeout</summary>
+      <description>Seconds to poll for proxy becoming active after system startup. 0 disables startup polling.</description>
+    </key>
     <key name="show-php-version" type="b">
       <default>true</default>
       <summary>Show PHP version</summary>

@@ -13,6 +13,7 @@ import { SymfonyServer } from './core/dto/SymfonyServer.js';
 import { ProxyStatus } from './core/dto/ProxyStatus.js';
 import { FavoritesRepository } from './core/services/FavoritesRepository.js';
 import { ServerPollingService } from './core/services/ServerPollingService.js';
+import { ProxyPollingService } from './core/services/ProxyPollingService.js';
 import { openAboutDialog } from './ui/components/AboutDialog.js';
 
 export default class SymfonyMenubarExtension extends Extension {
@@ -22,6 +23,7 @@ export default class SymfonyMenubarExtension extends Extension {
     private _lastServers: SymfonyServer[] | null = null;
     private _lastProxyStatus: ProxyStatus | null = null;
     private _pollingService: ServerPollingService | null = null;
+    private _proxyPollingService: ProxyPollingService | null = null;
     private _settings: ReturnType<Extension['getSettings']> | null = null;
 
     enable(): void {
@@ -38,6 +40,14 @@ export default class SymfonyMenubarExtension extends Extension {
             () => ({
                 pollInterval: this._settings?.get_int('polling-interval') ?? 5,
                 timeout: this._settings?.get_int('status-check-timeout') ?? 20,
+            }),
+            this._logger,
+        );
+
+        this._proxyPollingService = new ProxyPollingService(
+            () => ({
+                pollInterval: this._settings?.get_int('polling-interval') ?? 5,
+                startupTimeout: this._settings?.get_int('proxy-startup-timeout') ?? 60,
             }),
             this._logger,
         );
@@ -62,6 +72,7 @@ export default class SymfonyMenubarExtension extends Extension {
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
         this._refresh();
+        this._startProxyStartupPolling();
     }
 
     // ---- Private guards ----
@@ -80,6 +91,7 @@ export default class SymfonyMenubarExtension extends Extension {
         this._logger?.info('Disabling extension');
 
         this._pollingService?.cancelAll();
+        this._proxyPollingService?.cancel();
         this._indicator?.destroy();
 
         this._indicator = null;
@@ -88,6 +100,7 @@ export default class SymfonyMenubarExtension extends Extension {
         this._lastServers = null;
         this._lastProxyStatus = null;
         this._pollingService = null;
+        this._proxyPollingService = null;
         this._settings = null;
     }
 
@@ -183,6 +196,16 @@ export default class SymfonyMenubarExtension extends Extension {
                 this._i.updateProxyStatus(status);
             })
             .catch(err => this._logger?.error('Proxy refresh failed:', err));
+    }
+
+    private _startProxyStartupPolling(): void {
+        this._proxyPollingService?.startStartupPolling({
+            fetchProxyStatus: () => this._m.runCommand<ProxyStatus>('proxy:status'),
+            onProxyStarted: (status) => {
+                this._lastProxyStatus = status;
+                this._indicator?.updateProxyStatus(status);
+            },
+        });
     }
 
     private _refresh(): void {
