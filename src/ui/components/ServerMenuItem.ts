@@ -109,15 +109,15 @@ const ServerMenuItem = GObject.registerClass(
 
             if (this._isRunning) {
                 const stopItem = new PopupImageMenuItem('Stop server', 'media-playback-stop-symbolic');
-                stopItem.connect('activate', () => this._onStop?.(this._directory));
+                (stopItem as any).activate = () => this._onStop?.(this._directory);
                 this.menu.addMenuItem(stopItem);
 
                 const browserItem = new PopupImageMenuItem('Open in browser', 'web-browser-symbolic');
-                browserItem.connect('activate', () => this._onOpenBrowser?.(this._directory));
+                (browserItem as any).activate = () => this._onOpenBrowser?.(this._directory);
                 this.menu.addMenuItem(browserItem);
             } else {
                 const startItem = new PopupImageMenuItem('Start server', 'media-playback-start-symbolic');
-                startItem.connect('activate', () => this._onStart?.(this._directory));
+                (startItem as any).activate = () => this._onStart?.(this._directory);
                 this.menu.addMenuItem(startItem);
             }
 
@@ -129,7 +129,7 @@ const ServerMenuItem = GObject.registerClass(
             const favIcon = this._isFavorite ? 'starred-symbolic' : 'non-starred-symbolic';
             const favLabel = this._isFavorite ? 'Remove from favorites' : 'Add to favorites';
             const favItem = new PopupImageMenuItem(favLabel, favIcon);
-            favItem.connect('activate', () => this._onToggleFavorite?.(this._directory));
+            (favItem as any).activate = () => this._onToggleFavorite?.(this._directory);
             this.menu.addMenuItem(favItem);
         }
     }
