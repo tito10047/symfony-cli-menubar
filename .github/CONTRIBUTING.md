@@ -8,7 +8,7 @@ Be respectful, constructive, and professional in all interactions.
 ## How to Contribute
 
 ### Reporting Bugs
-1. Check if the bug has already been reported in [Issues](https://github.com/tito10047/symfony-cli-menubar/issues)
+1. Check if the bug has already been reported in [Issues](https://github.com/tito10047/menubar-for-symfony/issues)
 2. If not, create a new issue with:
    - Clear, descriptive title
    - Steps to reproduce

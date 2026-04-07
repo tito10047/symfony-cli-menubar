@@ -28,7 +28,7 @@ TODO: this package will be available by default distro package managers soon.
 ### Build from Source
 
 ```bash
-git clone https://github.com/tito10047/symfony-cli-menubar
+git clone https://github.com/tito10047/menubar-for-symfony
 cd symfony-cli-menubar
 
 # Build and package

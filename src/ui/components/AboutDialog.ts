@@ -3,7 +3,7 @@ import St from 'gi://St';
 import { ModalDialog } from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import { MessageDialogContent } from 'resource:///org/gnome/shell/ui/dialog.js';
 
-const REPO_URL = 'https://github.com/tito10047/symfony-cli-menubar';
+const REPO_URL = 'https://github.com/tito10047/menubar-for-symfony';
 
 export function openAboutDialog(version?: string): void {
     const dialog = new ModalDialog({ destroyOnClose: true });
